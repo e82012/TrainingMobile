@@ -44,7 +44,12 @@ export default function TrainingMobileApp() {
   const renderPrimaryLiftChart = () => {
     const sessions = data?.primaryLift.sessions || [];
     if (sessions.length === 0) {
-      return <p className="tip">尚無主項紀錄。</p>;
+      return (
+        <div className="tip text-center py-4">
+          <p className="text-[var(--muted)]">尚無主項紀錄。</p>
+          <p className="text-[11px] text-[var(--accent)] mt-1">點擊右下角「Gemini 記日誌」輸入今日訓練即可生成圖表！</p>
+        </div>
+      );
     }
 
     const rows = sessions.map((s) => ({
@@ -114,16 +119,17 @@ export default function TrainingMobileApp() {
     );
   };
 
-  const nextWorkoutId = data?.status.nextWorkout.workout || "Pull A";
-  const nextWorkoutPlan = data?.plans[nextWorkoutId] || data?.plans["Pull A"];
+  const nextWorkoutId = data?.status.nextWorkout.workout || "Push A";
+  const nextWorkoutPlan = data?.plans[nextWorkoutId] || data?.plans["Push A"];
 
-  const maxWeight = data?.primaryLift.sessions.length
-    ? Math.max(...data.primaryLift.sessions.flatMap((s) => s.sets.map(([kg]) => kg)))
-    : 55;
+  const hasSessions = (data?.primaryLift.sessions.length || 0) > 0;
+  const maxWeight = hasSessions
+    ? Math.max(...(data?.primaryLift.sessions || []).flatMap((s) => s.sets.map(([kg]) => kg)))
+    : 0;
 
-  const latestVolume = data?.primaryLift.sessions.length
-    ? data.primaryLift.sessions[data.primaryLift.sessions.length - 1].volume || 1680
-    : 1680;
+  const latestVolume = hasSessions
+    ? data?.primaryLift.sessions[(data?.primaryLift.sessions.length || 1) - 1].volume || 0
+    : 0;
 
   return (
     <div className="app">
@@ -165,10 +171,16 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card hero">
               <div className="kicker">Next Workout</div>
-              <div className="title">{data?.status.nextWorkout.workout || "Pull A"}</div>
+              <div className="title">{data?.status.nextWorkout.workout || "Push A"}</div>
               <div className="next">
-                上一次：<b>{data?.status.lastWorkout.date} {data?.status.lastWorkout.workout}</b> → 下一次直接進入{" "}
-                <b>{data?.status.nextWorkout.workout}</b>
+                {data?.status.lastWorkout.workout === "尚未開始" ? (
+                  <span>目前尚未有訓練紀錄 → 準備開始第一課 <b>{data?.status.nextWorkout.workout}</b></span>
+                ) : (
+                  <span>
+                    上一次：<b>{data?.status.lastWorkout.date} {data?.status.lastWorkout.workout}</b> → 下一次直接進入{" "}
+                    <b>{data?.status.nextWorkout.workout}</b>
+                  </span>
+                )}
               </div>
             </div>
 
@@ -180,8 +192,8 @@ export default function TrainingMobileApp() {
               <div className="timeline">
                 {(data?.status.cycle || ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"]).map(
                   (item, idx) => {
-                    const currentIdx = data?.status.currentIndex ?? 1;
-                    const isDone = idx === (currentIdx - 1 + 6) % 6;
+                    const currentIdx = data?.status.currentIndex ?? 0;
+                    const isDone = data?.logs.length ? idx === (currentIdx - 1 + 6) % 6 : false;
                     const isCurrent = idx === currentIdx;
                     return (
                       <div
@@ -230,11 +242,11 @@ export default function TrainingMobileApp() {
 
               <div className="lift-summary">
                 <div className="metric">
-                  <strong>{latestVolume.toLocaleString()} kg</strong>
+                  <strong>{hasSessions ? `${latestVolume.toLocaleString()} kg` : "-"}</strong>
                   <span>最近一次總 Volume</span>
                 </div>
                 <div className="metric">
-                  <strong>{maxWeight} kg</strong>
+                  <strong>{hasSessions ? `${maxWeight} kg` : "-"}</strong>
                   <span>主項最大訓練重量</span>
                 </div>
               </div>
@@ -253,7 +265,7 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card hero">
               <div className="kicker">Next Workout</div>
-              <div className="title">{nextWorkoutPlan?.name || "Pull A"}</div>
+              <div className="title">{nextWorkoutPlan?.name || "Push A"}</div>
               <div className="next">{nextWorkoutPlan?.description || "下一次訓練直接執行這張課表"}</div>
             </div>
 
@@ -295,7 +307,7 @@ export default function TrainingMobileApp() {
               </div>
               {(() => {
                 const cycle = data?.status.cycle || ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"];
-                const curr = data?.status.currentIndex ?? 1;
+                const curr = data?.status.currentIndex ?? 0;
                 const nexts = [1, 2, 3, 4].map((offset) => cycle[(curr + offset) % cycle.length]);
                 return nexts.map((name, idx) => (
                   <div key={idx} className="row">
@@ -367,42 +379,52 @@ export default function TrainingMobileApp() {
             <div className="card">
               <div className="section-title">
                 <h2>訓練日誌歷史</h2>
-                <span className="badge">訓練日誌表</span>
+                <span className="badge">{data?.logs.length || 0} 筆紀錄</span>
               </div>
-              <div className="scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>日期</th>
-                      <th>課表</th>
-                      <th>主項動作</th>
-                      <th>工作組明細</th>
-                      <th>最高重量</th>
-                      <th>輔助動作</th>
-                      <th>充血 / 感受</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data?.logs || []).map((row, idx) => (
-                      <tr key={idx}>
-                        <td>{row.date}</td>
-                        <td>
-                          <span className="font-bold text-[var(--accent)]">{row.workout}</span>
-                        </td>
-                        <td className="font-semibold text-[var(--text)]">{row.mainExercise}</td>
-                        <td>{row.mainSetsDetail}</td>
-                        <td className="text-[var(--blue)] font-bold">{row.maxWeight ? `${row.maxWeight} kg` : "-"}</td>
-                        <td className="text-[var(--muted)] max-w-[140px] truncate">{row.accessoryExercises || "-"}</td>
-                        <td>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--sunken)] text-[var(--orange)] border border-[var(--line)]">
-                            {row.pumpLevel || "良好"}
-                          </span>
-                        </td>
+
+              {(!data?.logs || data.logs.length === 0) ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-[var(--muted)]">目前 Google 試算表「訓練日誌」中尚無紀錄。</p>
+                  <p className="text-xs text-[var(--accent)] mt-2">
+                    點擊右下角【Gemini 記日誌】，輸入今天的訓練內容即可自動寫入！✨
+                  </p>
+                </div>
+              ) : (
+                <div className="scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>日期</th>
+                        <th>課表</th>
+                        <th>主項動作</th>
+                        <th>工作組明細</th>
+                        <th>最高重量</th>
+                        <th>輔助動作</th>
+                        <th>充血 / 感受</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {data.logs.map((row, idx) => (
+                        <tr key={idx}>
+                          <td>{row.date}</td>
+                          <td>
+                            <span className="font-bold text-[var(--accent)]">{row.workout}</span>
+                          </td>
+                          <td className="font-semibold text-[var(--text)]">{row.mainExercise}</td>
+                          <td>{row.mainSetsDetail}</td>
+                          <td className="text-[var(--blue)] font-bold">{row.maxWeight ? `${row.maxWeight} kg` : "-"}</td>
+                          <td className="text-[var(--muted)] max-w-[140px] truncate">{row.accessoryExercises || "-"}</td>
+                          <td>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--sunken)] text-[var(--orange)] border border-[var(--line)]">
+                              {row.pumpLevel || "良好"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <p className="tip">訓練日誌與 Google Sheets「訓練日誌」工作表 100% 同步。透過 Gemini 助理口語記錄後即時刷新！</p>
             </div>
           </section>
@@ -422,11 +444,11 @@ export default function TrainingMobileApp() {
               </div>
               <div className="row">
                 <span>最高重量紀錄</span>
-                <b className="num">{maxWeight} kg</b>
+                <b className="num">{hasSessions ? `${maxWeight} kg` : "-"}</b>
               </div>
               <div className="row">
                 <span>最近總 Volume</span>
-                <b className="num">{latestVolume.toLocaleString()} kg</b>
+                <b className="num">{hasSessions ? `${latestVolume.toLocaleString()} kg` : "-"}</b>
               </div>
               <div className="row">
                 <span>進階標準</span>
