@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Sparkles, X, Send, Bot, User, CheckCircle2, AlertCircle, Dumbbell } from "lucide-react";
+import { Sparkles, X, Send, Bot, User, CheckCircle2, AlertCircle } from "lucide-react";
 import { ChatMessage } from "@/types";
 
 interface GeminiAssistantModalProps {
@@ -17,7 +17,7 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
       id: "welcome",
       role: "assistant",
       content:
-        "嗨！我是你的專屬 Gemini 訓練助理。你可以直接用自然語言告訴我今天的訓練內容（例如：「今天練了 Push A，上斜槓鈴臥推 55kg 8下做3組、50kg 8下一組」），我會自動為你解析並寫入 Google Sheets！🔥",
+        "嗨！我是你的專屬 Gemini 訓練助理。你可以直接用自然語言告訴我今天的訓練內容（例如：「今天練了 Pull A，高位下拉 45kg 4組8下，機械划船 40kg 3組，背部充血很有感覺」），我會自動為你解析並寫入 Google Sheets「訓練日誌」！🔥",
       timestamp: Date.now(),
     },
   ]);
@@ -71,7 +71,7 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
           actionType: data.actionType,
           details: {
             workout: data.workout,
-            logs: data.logs,
+            log: data.log,
             sheetSuccess: data.sheetSuccess,
             demo: data.demo,
           },
@@ -81,7 +81,6 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
 
       setMessages((prev) => [...prev, botMsg]);
 
-      // 若成功寫入 Google Sheets，即時通知頁面重新抓取資料
       if (data.actionType === "ADD_LOG" && onDataUpdated) {
         onDataUpdated();
       }
@@ -99,9 +98,9 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
   };
 
   const quickPrompts = [
-    "今天 Push A：上斜臥推 50kg 8下四組，啞鈴側平舉 10kg 15下三組",
-    "今天練 Pull A：高位下拉 45kg 8下四組，機械划船 40kg 10下三組",
-    "今天 Legs A：深蹲 70kg 8下四組，機械腿推 120kg 10下三組",
+    "今天 Push A：上斜臥推 55kg 8下四組，啞鈴側平舉 10kg 15下三組，胸肌充血極佳",
+    "今天練 Pull A：高位下拉 50kg 8下四組，機械划船 40kg 10下三組，背部感受很好",
+    "今天 Legs A：深蹲 80kg 6下四組，機械腿推 140kg 10下三組，疲勞度中等",
   ];
 
   return (
@@ -127,7 +126,7 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity">
           <div
-            className="w-full sm:max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-t-[24px] sm:rounded-[24px] flex flex-col h-[82vh] sm:h-[650px] shadow-2xl overflow-hidden"
+            className="w-full sm:max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-t-[24px] sm:rounded-[24px] flex flex-col h-[85vh] sm:h-[650px] shadow-2xl overflow-hidden"
             style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
           >
             {/* Header */}
@@ -141,7 +140,7 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
                     Gemini 訓練助手
                     <span className="w-2 h-2 rounded-full bg-[var(--accent)] inline-block"></span>
                   </h3>
-                  <p className="text-[11px] text-[var(--muted)]">口語自動轉 Google Sheet 日誌</p>
+                  <p className="text-[11px] text-[var(--muted)]">自動結構化寫入「訓練日誌」表</p>
                 </div>
               </div>
               <button
@@ -161,7 +160,7 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
                   onClick={() => handleSend(p)}
                   className="px-2.5 py-1 rounded-full bg-[var(--card)] hover:bg-[var(--card2)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--text)] whitespace-nowrap transition-colors flex-shrink-0"
                 >
-                  {p.slice(0, 16)}...
+                  {p.slice(0, 14)}...
                 </button>
               ))}
             </div>
@@ -180,7 +179,7 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
                   )}
 
                   <div
-                    className={`max-w-[85%] rounded-[16px] px-3.5 py-2.5 text-xs leading-relaxed ${
+                    className={`max-w-[88%] rounded-[16px] px-3.5 py-2.5 text-xs leading-relaxed ${
                       m.role === "user"
                         ? "bg-[var(--accent-bg)] text-[var(--text)] border border-[var(--accent-line)]"
                         : "bg-[var(--sunken)] text-[var(--text)] border border-[var(--line)]"
@@ -190,29 +189,42 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
 
                     {/* 結構化寫入結果卡片 */}
                     {m.structuredAction?.details && (
-                      <div className="mt-2.5 pt-2 border-t border-[var(--line)] space-y-1.5">
+                      <div className="mt-2.5 pt-2 border-t border-[var(--line)] space-y-2">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-[var(--muted)]">課表：{m.structuredAction.details.workout}</span>
                           {m.structuredAction.success ? (
                             <span className="text-[var(--accent)] flex items-center gap-1 font-bold">
                               <CheckCircle2 className="w-3 h-3" />
-                              {m.structuredAction.details.demo ? "已記錄 (Demo 模式)" : "已寫入 Google Sheet"}
+                              {m.structuredAction.details.demo ? "已記錄 (Demo 模式)" : "已寫入 Google 試算表"}
                             </span>
                           ) : (
                             <span className="text-[var(--orange)] flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" /> 寫入異常
+                              <AlertCircle className="w-3 h-3" /> 寫入失敗
                             </span>
                           )}
                         </div>
 
-                        {m.structuredAction.details.logs && m.structuredAction.details.logs.length > 0 && (
-                          <div className="bg-[var(--card)] rounded-lg p-2 text-[10px] space-y-1">
-                            {m.structuredAction.details.logs.map((logItem: any, lIdx: number) => (
-                              <div key={lIdx} className="flex justify-between items-center text-[var(--muted)]">
-                                <span className="font-semibold text-[var(--text)]">{logItem.exercise}</span>
-                                <span>{logItem.setsReps}</span>
+                        {m.structuredAction.details.log && (
+                          <div className="bg-[var(--card)] rounded-lg p-2.5 text-[11px] space-y-1.5 border border-[var(--line)]">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[var(--muted)]">主項動作：</span>
+                              <b className="text-[var(--accent)]">{m.structuredAction.details.log.mainExercise}</b>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-[var(--muted)]">工作組明細：</span>
+                              <span>{m.structuredAction.details.log.mainSetsDetail}</span>
+                            </div>
+                            {m.structuredAction.details.log.accessoryExercises && (
+                              <div className="flex justify-between items-start">
+                                <span className="text-[var(--muted)] flex-shrink-0">輔助動作：</span>
+                                <span className="text-right text-[var(--muted)]">{m.structuredAction.details.log.accessoryExercises}</span>
                               </div>
-                            ))}
+                            )}
+                            {m.structuredAction.details.log.aiNextSuggestion && (
+                              <div className="pt-1 border-t border-[var(--line)] text-[10px] text-[var(--orange)]">
+                                💡 下次建議：{m.structuredAction.details.log.aiNextSuggestion}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

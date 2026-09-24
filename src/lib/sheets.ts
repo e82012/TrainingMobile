@@ -1,124 +1,95 @@
 import { google } from "googleapis";
-import { DashboardData, TrainingLog, WorkoutPlan, PrimaryLiftSession } from "@/types";
+import { DashboardData, TrainingLog, WorkoutPlan, PrimaryLiftSession, WorkoutExercise } from "@/types";
 
-// 原版模板的預設基準課表（作為 Fallback 或初始化範本）
 export const DEFAULT_PLANS: Record<string, WorkoutPlan> = {
   "Push A": {
     id: "Push A",
-    name: "Push A · 胸部主導",
-    description: "胸部主導 · 上斜臥推為 Primary Lift",
+    name: "Push A",
+    category: "胸、側三角、三頭",
+    description: "胸、側三角、三頭 · 上斜槓鈴臥推為 Primary Lift",
     exercises: [
-      { name: "上斜槓鈴臥推", sets: "4 × 6–8", notes: "RIR 1–2 · 主項，重視離心控制與上胸張力", isPrimary: true },
-      { name: "平椅啞鈴臥推", sets: "3 × 8–10", notes: "RIR 1–2 · 底部充分拉伸，向心頂峰收縮" },
-      { name: "機械雙槓臂屈伸", sets: "3 × 8–12", notes: "RIR 1–2 · 軀幹微前傾聚焦下胸與三頭" },
-      { name: "啞鈴側平舉", sets: "4 × 12–15", notes: "RIR 1–2 · 手肘引導，頂峰微停頓" },
-      { name: "繩索三頭下壓", sets: "3 × 10–12", notes: "RIR 0–1 · 大臂夾緊身體，充分伸展" },
+      { name: "上斜槓鈴臥推", type: "主項", sets: "4 × 6–8", notes: "RIR 1–2 · 主項動作", isPrimary: true },
+      { name: "機械平胸推", type: "輔助", sets: "3 × 8–10", notes: "控制離心" },
+      { name: "機械下胸 Dip", type: "輔助", sets: "3 × 8–12", notes: "微前傾" },
+      { name: "蝴蝶機夾胸", type: "輔助", sets: "3 × 12–15", notes: "頂峰收縮" },
+      { name: "啞鈴側平舉", type: "輔助", sets: "4 × 12–15", notes: "手肘引導" },
+      { name: "機械三頭下壓", type: "輔助", sets: "3 × 10–12", notes: "充分伸展" },
     ],
   },
   "Pull A": {
     id: "Pull A",
-    name: "Pull A · 背部主導",
-    description: "背部主導 · 下一次訓練直接執行這張課表",
+    name: "Pull A",
+    category: "背部、二頭",
+    description: "背部、二頭 · 高位下拉／引體向上為 Primary Lift",
     exercises: [
-      { name: "高位下拉／引體向上", sets: "4 × 6–10", notes: "RIR 1–2 · 想像手肘往身體兩側／髖部方向移動，避免大幅後仰借力", isPrimary: true },
-      { name: "水平機械划船", sets: "4 × 8–10", notes: "RIR 1–2 · 胸部固定，拉回時肩胛向後收" },
-      { name: "機械下拉", sets: "3 × 8–12", notes: "RIR 1–2 · 第二個背闊肌刺激，控制離心" },
-      { name: "單邊機械下拉", sets: "3 × 10–12", notes: "RIR 1–2 · 弱側先做，強側不要超過弱側 Reps" },
-      { name: "後三角飛鳥", sets: "4 × 12–15", notes: "RIR 1–2 · 不需要很重，專注後三角收縮" },
-      { name: "二頭彎舉", sets: "3 × 8–12", notes: "RIR 1–2 · 手肘固定、下放完整，最後一組可接近力竭" },
+      { name: "高位下拉／引體向上", type: "主項", sets: "4 × 6–10", notes: "RIR 1–2", isPrimary: true },
+      { name: "划船動作", type: "輔助", sets: "4 × 8–10", notes: "胸部固定，肩胛後收" },
+      { name: "後三角動作", type: "輔助", sets: "4 × 12–15", notes: "專注收縮" },
+      { name: "二頭彎舉", type: "輔助", sets: "3 × 8–12", notes: "手肘固定" },
     ],
   },
   "Legs A": {
     id: "Legs A",
-    name: "Legs A · 腿部主導",
-    description: "腿部主導 · 股四頭肌與小腿聚焦",
+    name: "Legs A",
+    category: "腿部主導",
+    description: "腿部主導 · 深蹲為 Primary Lift",
     exercises: [
-      { name: "深蹲 / 史密斯深蹲", sets: "4 × 6–8", notes: "RIR 1–2 · 軀幹緊繃，下蹲至大腿與地面平行或更深", isPrimary: true },
-      { name: "機械腿推機", sets: "3 × 10–12", notes: "RIR 1–2 · 腳掌中置，全行程推動" },
-      { name: "機械腿屈伸", sets: "3 × 12–15", notes: "RIR 0–1 · 頂峰收縮維持 1 秒" },
-      { name: "羅馬尼亞硬舉", sets: "3 × 8–10", notes: "RIR 1–2 · 髖鉸鏈主導，拉伸膕繩肌" },
-      { name: "站姿提踵", sets: "4 × 15–20", notes: "RIR 0–1 · 底部徹底伸展，頂峰充分收縮" },
+      { name: "深蹲", type: "主項", sets: "4 × 6–8", notes: "深蹲至大腿平行", isPrimary: true },
+      { name: "機械腿推機", type: "輔助", sets: "3 × 10–12", notes: "全行程推動" },
+      { name: "腿屈伸", type: "輔助", sets: "3 × 12–15", notes: "頂峰停頓" },
     ],
   },
   "Push B": {
     id: "Push B",
-    name: "Push B · 肩部主導",
-    description: "肩部主導 · 肩推與胸部輔助",
+    name: "Push B",
+    category: "肩部主導",
+    description: "肩部主導 · 肩推為 Primary Lift",
     exercises: [
-      { name: "站姿槓鈴肩推 / 啞鈴肩推", sets: "4 × 6–8", notes: "RIR 1–2 · 核心收緊，垂直向上推舉", isPrimary: true },
-      { name: "上斜啞鈴臥推", sets: "3 × 8–10", notes: "RIR 1–2 · 穩定節奏" },
-      { name: "機械胸飛鳥", sets: "3 × 12–15", notes: "RIR 1 · 胸大肌最大張力伸展" },
-      { name: "埃及側平舉 / 纜繩側平舉", sets: "4 × 12–15", notes: "RIR 0–1 · 持續恆張力" },
-      { name: "過頂三頭臂屈伸", sets: "3 × 10–12", notes: "RIR 1 · 伸展三頭長頭" },
+      { name: "站姿肩推", type: "主項", sets: "4 × 6–8", notes: "核心收緊", isPrimary: true },
+      { name: "上斜啞鈴臥推", type: "輔助", sets: "3 × 8–10", notes: "穩定節奏" },
+      { name: "側平舉", type: "輔助", sets: "4 × 12–15", notes: "恆張力" },
     ],
   },
   "Pull B": {
     id: "Pull B",
-    name: "Pull B · 背厚度與上背",
-    description: "上背與菱形肌主導 · 強化後側鏈",
+    name: "Pull B",
+    category: "背厚度",
+    description: "背厚度 · 划船為 Primary Lift",
     exercises: [
-      { name: "俯身槓鈴划船", sets: "4 × 6–8", notes: "RIR 1–2 · 腹部收緊，拉向肚臍", isPrimary: true },
-      { name: "寬握高位下拉", sets: "3 × 8–10", notes: "RIR 1–2 · 手肘向下收" },
-      { name: "坐姿纜繩面拉", sets: "4 × 12–15", notes: "RIR 1 · 外旋動作，強化肩袖與後三角" },
-      { name: "啞鈴鎚式彎舉", sets: "3 × 10–12", notes: "RIR 1 · 針對肱橈肌與肱肌" },
-      { name: "斜板支撐蜘蛛彎舉", sets: "3 × 10–12", notes: "RIR 0–1 · 孤立二頭短頭" },
+      { name: "槓鈴划船", type: "主項", sets: "4 × 6–8", notes: "腹部收緊", isPrimary: true },
+      { name: "面拉", type: "輔助", sets: "4 × 12–15", notes: "肩袖強化" },
     ],
   },
   "Legs B": {
     id: "Legs B",
-    name: "Legs B · 後側鏈主導",
-    description: "臀部、膕繩肌主導 · 平衡下肢發展",
+    name: "Legs B",
+    category: "後側鏈",
+    description: "後側鏈 · 硬舉為 Primary Lift",
     exercises: [
-      { name: "傳統硬舉 / 陷阱槓硬舉", sets: "3 × 5–6", notes: "RIR 2 · 建立後側力量基底", isPrimary: true },
-      { name: "啞鈴保加利亞分腿蹲", sets: "3 × 8–10 (每腿)", notes: "RIR 1–2 · 單側平衡與臀大肌" },
-      { name: "俯臥腿彎舉", sets: "4 × 10–12", notes: "RIR 0–1 · 離心 3 秒緩慢下放" },
-      { name: "機械臀推", sets: "3 × 10–12", notes: "RIR 1 · 頂峰夾緊臀肌" },
-      { name: "坐姿提踵", sets: "4 × 12–15", notes: "RIR 0–1 · 針對比目魚肌" },
+      { name: "硬舉", type: "主項", sets: "3 × 5–6", notes: "後側發力", isPrimary: true },
+      { name: "腿彎舉", type: "輔助", sets: "4 × 10–12", notes: "離心慢放" },
     ],
   },
 };
 
 export const DEFAULT_LOGS: TrainingLog[] = [
   {
-    date: "20260922",
+    date: "2026-09-22",
+    planId: "260922",
     workout: "Push A",
-    exercise: "上斜槓鈴臥推",
-    setsReps: "50×8 / 55×8 / 55×8 / 50×8",
-    volume: 1680,
-    notes: "首日基準測試，4組狀態良好",
-  },
-  {
-    date: "20260922",
-    workout: "Push A",
-    exercise: "平椅啞鈴臥推",
-    setsReps: "24×10 / 26×10 / 26×8",
-    volume: 1472,
-    notes: "頂峰感受度極佳",
-  },
-  {
-    date: "20260922",
-    workout: "Push A",
-    exercise: "啞鈴側平舉",
-    setsReps: "10×15 / 10×15 / 10×12 / 10×12",
-    volume: 540,
-    notes: "側三角肌充血顯著",
-  },
-];
-
-export const DEFAULT_SESSIONS: PrimaryLiftSession[] = [
-  {
-    date: "20260922",
-    sets: [
-      [50, 8],
-      [55, 8],
-      [55, 8],
-      [50, 8],
-    ],
+    mainExercise: "上斜槓鈴臥推",
+    mainSetsDetail: "50×8 / 55×8 / 55×8 / 50×8",
+    maxWeight: 55,
+    accessoryExercises: "機械平胸推、啞鈴側平舉、機械三頭下壓",
+    pumpLevel: "極佳",
+    muscleFeeling: "上胸與側三角充血顯著",
+    fatigueLevel: "中等",
+    aiSummary: "基準日主項 4 組達成，動作穩定度佳",
+    aiNextSuggestion: "下次可嘗試將第 1 組直接從 55kg 起跳",
     volume: 1680,
   },
 ];
 
-// 取得 Google Sheets 授權客戶端
 export function getSheetsClient() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;
@@ -127,7 +98,6 @@ export function getSheetsClient() {
     return null;
   }
 
-  // 處理 Vercel 或 .env 中私鑰換行字元
   if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
     privateKey = privateKey.slice(1, -1);
   }
@@ -142,29 +112,58 @@ export function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
-// 取得試算表 ID
 export function getSpreadsheetId(): string {
   return process.env.GOOGLE_SHEET_ID || "your_google_sheet_id_here";
 }
 
-// 讀取儀表板完整資料（支援 Google Sheets 讀取 + 容錯 Fallback）
+// 輔助函式：解析組數次數字串（如 "50x8 / 55x8 / 55x8 / 50x8" 或 "4組x8下"）
+function parseSetsAndCalculateVolume(detailStr: string, maxKg: number): { sets: [number, number][]; volume: number } {
+  const sets: [number, number][] = [];
+  const matches = detailStr.match(/(\d+)\s*[x×*]\s*(\d+)/gi);
+
+  if (matches) {
+    for (const m of matches) {
+      const parts = m.split(/[x×*]/i);
+      const kg = parseInt(parts[0], 10);
+      const reps = parseInt(parts[1], 10);
+      if (!isNaN(kg) && !isNaN(reps)) {
+        sets.push([kg, reps]);
+      }
+    }
+  }
+
+  // 若只有像 "4組x8下" 且給了 maxKg
+  if (sets.length === 0 && detailStr.includes("組")) {
+    const numSetsMatch = detailStr.match(/(\d+)\s*組/);
+    const repsMatch = detailStr.match(/(\d+)\s*下/);
+    const numSets = numSetsMatch ? parseInt(numSetsMatch[1], 10) : 4;
+    const reps = repsMatch ? parseInt(repsMatch[1], 10) : 8;
+    for (let i = 0; i < numSets; i++) {
+      sets.push([maxKg || 50, reps]);
+    }
+  }
+
+  const volume = sets.reduce((sum, [kg, reps]) => sum + kg * reps, 0);
+  return { sets, volume };
+}
+
+// 讀取儀表板完整資料（直接連動使用者的 Google Sheet）
 export async function fetchDashboardData(): Promise<DashboardData> {
   const sheets = getSheetsClient();
   const spreadsheetId = getSpreadsheetId();
 
-  // 若尚未設定 Google Service Account，回傳預設展示資料
   if (!sheets) {
     return {
       status: {
         lastWorkout: { date: "260922", workout: "Push A" },
-        nextWorkout: { workout: "Pull A", subtitle: "背部主導 · 下一次訓練直接執行這張課表" },
+        nextWorkout: { workout: "Pull A", subtitle: "背部、二頭 · 下一次訓練直接執行這張課表" },
         cycle: ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"],
         currentIndex: 1,
       },
       primaryLift: {
         name: "上斜槓鈴臥推",
         target: "4 × 6–8",
-        sessions: DEFAULT_SESSIONS,
+        sessions: [{ date: "2026-09-22", sets: [[50, 8], [55, 8], [55, 8], [50, 8]], volume: 1680, maxWeight: 55 }],
       },
       plans: DEFAULT_PLANS,
       logs: DEFAULT_LOGS,
@@ -173,61 +172,111 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   }
 
   try {
-    // 嘗試從 Google Sheets 讀取 Training_Logs
-    const logsRes = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "Training_Logs!A2:F",
-    }).catch(() => null);
+    // 1. 同時讀取「訓練課表」與「訓練日誌」
+    const [sheetMeta, planRes, logRes] = await Promise.all([
+      sheets.spreadsheets.get({ spreadsheetId }),
+      sheets.spreadsheets.values.get({ spreadsheetId, range: "訓練課表!A2:J" }).catch(() => null),
+      sheets.spreadsheets.values.get({ spreadsheetId, range: "訓練日誌!A2:L" }).catch(() => null),
+    ]);
 
-    let logs = DEFAULT_LOGS;
-    if (logsRes?.data.values && logsRes.data.values.length > 0) {
-      logs = logsRes.data.values.map((row) => ({
-        date: String(row[0] || ""),
-        workout: String(row[1] || ""),
-        exercise: String(row[2] || ""),
-        setsReps: String(row[3] || ""),
-        volume: Number(row[4]) || 0,
-        notes: String(row[5] || ""),
-      }));
+    const title = sheetMeta.data.properties?.title || "Workout Tracker";
+
+    // 2. 解析課表 (Workout Plans)
+    let plans: Record<string, WorkoutPlan> = { ...DEFAULT_PLANS };
+    if (planRes?.data.values && planRes.data.values.length > 0) {
+      const dynamicPlans: Record<string, WorkoutPlan> = {};
+      for (const row of planRes.data.values) {
+        const workoutName = String(row[4] || "").trim(); // E: 課表名稱
+        const category = String(row[5] || "").trim(); // F: 訓練部位
+        const exerciseName = String(row[6] || "").trim(); // G: 動作名稱
+        const type = String(row[7] || "").trim(); // H: 類型 (主項 / 輔助)
+        const sets = String(row[8] || "").trim(); // I: 目標組數與次數
+        const notes = String(row[9] || "").trim(); // J: 下一階段目標
+
+        if (!workoutName || !exerciseName) continue;
+
+        if (!dynamicPlans[workoutName]) {
+          dynamicPlans[workoutName] = {
+            id: workoutName,
+            name: workoutName,
+            category,
+            description: `${category} · ${type === "主項" ? exerciseName + " 為主項" : "滾動循環"}`,
+            exercises: [],
+          };
+        }
+
+        dynamicPlans[workoutName].exercises.push({
+          name: exerciseName,
+          type,
+          sets: sets || "3 × 8–12",
+          notes: notes || (type === "主項" ? "主項動作" : "輔助刺激"),
+          isPrimary: type === "主項",
+        });
+      }
+
+      if (Object.keys(dynamicPlans).length > 0) {
+        plans = dynamicPlans;
+      }
     }
 
-    // 計算 Primary Lift（上斜槓鈴臥推） Sessions
+    // 3. 解析訓練日誌 (Training Logs)
+    let logs: TrainingLog[] = DEFAULT_LOGS;
+    if (logRes?.data.values && logRes.data.values.length > 0) {
+      logs = logRes.data.values.map((row) => {
+        const maxWeight = parseFloat(row[5]) || 0;
+        const mainSetsDetail = String(row[4] || "");
+        const { volume } = parseSetsAndCalculateVolume(mainSetsDetail, maxWeight);
+
+        return {
+          date: String(row[0] || ""),
+          planId: String(row[1] || ""),
+          workout: String(row[2] || ""),
+          mainExercise: String(row[3] || ""),
+          mainSetsDetail,
+          maxWeight,
+          accessoryExercises: String(row[6] || ""),
+          pumpLevel: String(row[7] || ""),
+          muscleFeeling: String(row[8] || ""),
+          fatigueLevel: String(row[9] || ""),
+          aiSummary: String(row[10] || ""),
+          aiNextSuggestion: String(row[11] || ""),
+          volume,
+        };
+      });
+    }
+
+    // 4. 計算 Primary Lift 進度數據
     const primarySessions: PrimaryLiftSession[] = [];
-    const primaryLogs = logs.filter((l) => l.exercise.includes("上斜") || l.exercise.includes("臥推"));
-    
-    // 依日期分組
-    const dateMap = new Map<string, [number, number][]>();
-    primaryLogs.forEach((log) => {
-      // 解析 50x8 / 55x8
-      const setMatches = log.setsReps.match(/(\d+)\s*[x×*]\s*(\d+)/g);
-      if (setMatches) {
-        const parsedSets = setMatches.map((m) => {
-          const parts = m.split(/[x×*]/);
-          return [parseInt(parts[0], 10), parseInt(parts[1], 10)] as [number, number];
+    logs.forEach((l) => {
+      if (l.mainExercise) {
+        const { sets, volume } = parseSetsAndCalculateVolume(l.mainSetsDetail, l.maxWeight);
+        primarySessions.push({
+          date: l.date.replace(/-/g, ""),
+          sets: sets.length > 0 ? sets : [[l.maxWeight || 50, 8]],
+          volume: volume || (l.maxWeight ? l.maxWeight * 8 * 4 : 1600),
+          maxWeight: l.maxWeight,
         });
-        const existing = dateMap.get(log.date) || [];
-        dateMap.set(log.date, [...existing, ...parsedSets]);
       }
     });
 
-    dateMap.forEach((sets, date) => {
-      const volume = sets.reduce((sum, [kg, reps]) => sum + kg * reps, 0);
-      primarySessions.push({ date, sets, volume });
-    });
-
     if (primarySessions.length === 0) {
-      primarySessions.push(...DEFAULT_SESSIONS);
+      primarySessions.push({
+        date: "20260922",
+        sets: [[50, 8], [55, 8], [55, 8], [50, 8]],
+        volume: 1680,
+        maxWeight: 55,
+      });
     }
 
-    // 動態判斷最新完成的課表與下一個課表
+    // 5. 滾動循環判斷
     const cycle = ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"];
     let lastWorkoutName = "Push A";
     let lastDate = "260922";
     if (logs.length > 0) {
-      const latestLog = logs[logs.length - 1];
-      if (latestLog.workout) {
-        lastWorkoutName = latestLog.workout;
-        lastDate = latestLog.date.slice(-6);
+      const latest = logs[logs.length - 1];
+      if (latest.workout) {
+        lastWorkoutName = latest.workout;
+        lastDate = latest.date.replace(/-/g, "").slice(-6);
       }
     }
 
@@ -240,33 +289,34 @@ export async function fetchDashboardData(): Promise<DashboardData> {
         lastWorkout: { date: lastDate, workout: lastWorkoutName },
         nextWorkout: {
           workout: nextWorkoutName,
-          subtitle: DEFAULT_PLANS[nextWorkoutName]?.description || "下一次訓練直接執行這張課表",
+          subtitle: plans[nextWorkoutName]?.description || "下一次訓練直接執行這張課表",
         },
         cycle,
         currentIndex: nextIdx,
       },
       primaryLift: {
-        name: "上斜槓鈴臥推",
+        name: logs[logs.length - 1]?.mainExercise || "上斜槓鈴臥推",
         target: "4 × 6–8",
         sessions: primarySessions,
       },
-      plans: DEFAULT_PLANS,
+      plans,
       logs,
       isDemoMode: false,
+      spreadsheetTitle: title,
     };
   } catch (err) {
-    console.error("讀取 Google Sheet 失敗，切換至 Fallback 模式:", err);
+    console.error("讀取 Google Sheet 發生錯誤，回退至備用:", err);
     return {
       status: {
         lastWorkout: { date: "260922", workout: "Push A" },
-        nextWorkout: { workout: "Pull A", subtitle: "背部主導 · 下一次訓練直接執行這張課表" },
+        nextWorkout: { workout: "Pull A", subtitle: "背部、二頭 · 下一次訓練直接執行這張課表" },
         cycle: ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"],
         currentIndex: 1,
       },
       primaryLift: {
         name: "上斜槓鈴臥推",
         target: "4 × 6–8",
-        sessions: DEFAULT_SESSIONS,
+        sessions: [{ date: "20260922", sets: [[50, 8], [55, 8], [55, 8], [50, 8]], volume: 1680, maxWeight: 55 }],
       },
       plans: DEFAULT_PLANS,
       logs: DEFAULT_LOGS,
@@ -275,49 +325,40 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   }
 }
 
-// 寫入訓練日誌到 Google Sheets
-export async function appendTrainingLogsToSheet(logs: TrainingLog[]) {
+// 寫入訓練日誌到 Google Sheets（精確對齊 12 欄表頭）
+export async function appendTrainingLogToSheet(log: TrainingLog) {
   const sheets = getSheetsClient();
   const spreadsheetId = getSpreadsheetId();
 
   if (!sheets) {
     console.warn("尚未配置 Google Service Account，暫存於 Demo 模式");
-    return { success: true, count: logs.length, demo: true };
+    return { success: true, count: 1, demo: true };
   }
 
-  // 準備寫入列格式：日期, 課表, 動作, 重量xReps, Volume, 備註
-  const rows = logs.map((log) => [
+  // 欄位依序：日期, 課表計畫id, 課表, 主項動作, 主項工作組明細, 最高重量(kg), 輔助動作, 充血度, 目標肌群感受, 疲勞度, AI評估摘要, 下次行動建議
+  const rowValues = [
     log.date,
+    log.planId || "260922",
     log.workout,
-    log.exercise,
-    log.setsReps,
-    log.volume || 0,
-    log.notes || "",
-  ]);
+    log.mainExercise,
+    log.mainSetsDetail,
+    log.maxWeight || 0,
+    log.accessoryExercises || "",
+    log.pumpLevel || "佳",
+    log.muscleFeeling || "良好",
+    log.fatigueLevel || "中等",
+    log.aiSummary || "",
+    log.aiNextSuggestion || "",
+  ];
 
-  try {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range: "Training_Logs!A:F",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: rows,
-      },
-    });
-    return { success: true, count: rows.length, demo: false };
-  } catch (error: any) {
-    // 若 Training_Logs 工作表尚未建立，嘗試寫入第一個工作表 (Sheet1)
-    if (error?.message?.includes("Unable to parse range")) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId,
-        range: "A:F",
-        valueInputOption: "USER_ENTERED",
-        requestBody: {
-          values: rows,
-        },
-      });
-      return { success: true, count: rows.length, demo: false };
-    }
-    throw error;
-  }
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: "訓練日誌!A:L",
+    valueInputOption: "USER_ENTERED",
+    requestBody: {
+      values: [rowValues],
+    },
+  });
+
+  return { success: true, count: 1, demo: false };
 }

@@ -9,6 +9,7 @@ import {
   TrendingUp,
   RefreshCw,
   Sparkles,
+  CheckCircle2,
   Info,
 } from "lucide-react";
 import { DashboardData } from "@/types";
@@ -130,7 +131,7 @@ export default function TrainingMobileApp() {
       <header className="flex items-center justify-between">
         <div>
           <h1>PPL Training</h1>
-          <div className="sub">8 週滾動式 PPL · V1.0 · Google Sheets 雲端連動</div>
+          <div className="sub">8 週滾動式 PPL · Google Sheets 雲端連動</div>
         </div>
         <button
           onClick={loadData}
@@ -143,15 +144,20 @@ export default function TrainingMobileApp() {
         </button>
       </header>
 
-      {/* Demo 模式狀態橫幅提醒 */}
-      {data?.isDemoMode && (
-        <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-[11px] text-[var(--muted)] flex items-center justify-between">
+      {/* 雲端連線狀態橫幅 */}
+      <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-[11px] text-[var(--muted)] flex items-center justify-between">
+        {data?.isDemoMode ? (
           <div className="flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5 text-[var(--orange)] flex-shrink-0" />
-            <span>目前為展示模式（配置 Google Service Account 即可同步雲端 Sheets）</span>
+            <span>展示模式（配置 Google Service Account 即可連線雲端試算表）</span>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex items-center gap-1.5 text-[var(--accent)] font-medium">
+            <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>已成功連線 Google 試算表：{data?.spreadsheetTitle || "Workout Tracker"}</span>
+          </div>
+        )}
+      </div>
 
       <main>
         {/* ==================== 1. 總覽 (Home) ==================== */}
@@ -208,7 +214,7 @@ export default function TrainingMobileApp() {
                 </b>
               </div>
               <div className="stat">
-                <span>訓練紀錄</span>
+                <span>訓練日誌</span>
                 <b>{data?.logs.length || 0} 筆</b>
               </div>
             </div>
@@ -217,7 +223,7 @@ export default function TrainingMobileApp() {
               <div className="section-title">
                 <div>
                   <div className="eyebrow">Primary Lift</div>
-                  <h2>Push A · {data?.primaryLift.name || "上斜槓鈴臥推"}</h2>
+                  <h2>{data?.primaryLift.name || "上斜槓鈴臥推"}</h2>
                 </div>
                 <span className="badge">{data?.primaryLift.target || "4 × 6–8"}</span>
               </div>
@@ -236,7 +242,7 @@ export default function TrainingMobileApp() {
               {renderPrimaryLiftChart()}
 
               <div className="trend-note">
-                <b>總 Volume = Σ（重量 × Reps）</b>，每次訓練只記一筆，只計算該 Workout 的 Primary Lift。
+                <b>總 Volume = Σ（重量 × Reps）</b>，每次訓練只記一筆，計算該 Workout 的 Primary Lift。
               </div>
             </section>
           </section>
@@ -247,13 +253,13 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card hero">
               <div className="kicker">Next Workout</div>
-              <div className="title">{nextWorkoutPlan?.id || "Pull A"}</div>
+              <div className="title">{nextWorkoutPlan?.name || "Pull A"}</div>
               <div className="next">{nextWorkoutPlan?.description || "下一次訓練直接執行這張課表"}</div>
             </div>
 
             <div className="card">
               <div className="section-title">
-                <h2>{nextWorkoutPlan?.name || "Pull A 課表"}</h2>
+                <h2>{nextWorkoutPlan?.name} 課表</h2>
                 <span className="badge">
                   {nextWorkoutPlan?.exercises.length || 0} 動作 ·{" "}
                   {nextWorkoutPlan?.exercises.reduce(
@@ -307,8 +313,8 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card">
               <div className="section-title">
-                <h2>8 週滾動式 PPL</h2>
-                <span className="badge">V1.0</span>
+                <h2>8 週滾動式 PPL 課表</h2>
+                <span className="badge">Google Sheets</span>
               </div>
               <div className="row">
                 <span>建立日期</span>
@@ -316,36 +322,21 @@ export default function TrainingMobileApp() {
               </div>
               <div className="row">
                 <span>目標</span>
-                <span>肌肥大／力量維持與提升／訓練品質／疲勞管理</span>
+                <span>肌肥大／力量維持與提升／漸進超負荷</span>
               </div>
             </div>
 
             <div className="card">
-              <h2>六課循環</h2>
-              <div className="row">
-                <span className="num">01</span>
-                <b>Push A · 胸部主導（上斜臥推）</b>
-              </div>
-              <div className="row">
-                <span className="num">02</span>
-                <b>Pull A · 背部主導（垂直拉）</b>
-              </div>
-              <div className="row">
-                <span className="num">03</span>
-                <b>Legs A · 腿部主導（股四頭）</b>
-              </div>
-              <div className="row">
-                <span className="num">04</span>
-                <b>Push B · 肩部主導（肩推）</b>
-              </div>
-              <div className="row">
-                <span className="num">05</span>
-                <b>Pull B · 背厚度（水平划船與上背）</b>
-              </div>
-              <div className="row">
-                <span className="num">06</span>
-                <b>Legs B · 後側鏈主導（硬舉與膕繩肌）</b>
-              </div>
+              <h2>六課循環計畫</h2>
+              {Object.values(data?.plans || {}).map((p, idx) => (
+                <div key={p.id} className="row">
+                  <span className="num">0{idx + 1}</span>
+                  <div>
+                    <b>{p.name}</b>
+                    <span className="block text-[11px] text-[var(--muted)]">{p.category}</span>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="card">
@@ -375,8 +366,8 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card">
               <div className="section-title">
-                <h2>訓練紀錄</h2>
-                <span className="badge">History</span>
+                <h2>訓練日誌歷史</h2>
+                <span className="badge">訓練日誌表</span>
               </div>
               <div className="scroll">
                 <table>
@@ -384,9 +375,11 @@ export default function TrainingMobileApp() {
                     <tr>
                       <th>日期</th>
                       <th>課表</th>
-                      <th>動作</th>
-                      <th>重量 × Reps</th>
-                      <th>Volume</th>
+                      <th>主項動作</th>
+                      <th>工作組明細</th>
+                      <th>最高重量</th>
+                      <th>輔助動作</th>
+                      <th>充血 / 感受</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -396,17 +389,21 @@ export default function TrainingMobileApp() {
                         <td>
                           <span className="font-bold text-[var(--accent)]">{row.workout}</span>
                         </td>
-                        <td>{row.exercise}</td>
-                        <td>{row.setsReps}</td>
-                        <td className="text-[var(--blue)] font-medium">
-                          {row.volume ? `${row.volume.toLocaleString()} kg` : "-"}
+                        <td className="font-semibold text-[var(--text)]">{row.mainExercise}</td>
+                        <td>{row.mainSetsDetail}</td>
+                        <td className="text-[var(--blue)] font-bold">{row.maxWeight ? `${row.maxWeight} kg` : "-"}</td>
+                        <td className="text-[var(--muted)] max-w-[140px] truncate">{row.accessoryExercises || "-"}</td>
+                        <td>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--sunken)] text-[var(--orange)] border border-[var(--line)]">
+                            {row.pumpLevel || "良好"}
+                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="tip">訓練紀錄與 Google Sheets 雲端連動。透過 Gemini 助理口語記錄後，此處會即時同步！</p>
+              <p className="tip">訓練日誌與 Google Sheets「訓練日誌」工作表 100% 同步。透過 Gemini 助理口語記錄後即時刷新！</p>
             </div>
           </section>
         )}
@@ -420,15 +417,15 @@ export default function TrainingMobileApp() {
                 <span className="badge">Primary Lift</span>
               </div>
               <div className="row">
-                <span>上斜槓鈴臥推</span>
+                <span>{data?.primaryLift.name || "上斜槓鈴臥推"}</span>
                 <b>Push A</b>
               </div>
               <div className="row">
-                <span>Baseline</span>
-                <b className="num">50×8 / 55×8 / 55×8 / 50×8</b>
+                <span>最高重量紀錄</span>
+                <b className="num">{maxWeight} kg</b>
               </div>
               <div className="row">
-                <span>總 Volume</span>
+                <span>最近總 Volume</span>
                 <b className="num">{latestVolume.toLocaleString()} kg</b>
               </div>
               <div className="row">

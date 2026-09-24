@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseWorkoutChat } from "@/lib/gemini";
-import { appendTrainingLogsToSheet } from "@/lib/sheets";
+import { appendTrainingLogToSheet } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -22,15 +22,15 @@ export async function POST(req: NextRequest) {
     let sheetResult = { success: true, count: 0, demo: true };
 
     // 2. 若為新增日誌，自動寫入 Google Sheets
-    if (parsed.actionType === "ADD_LOG" && parsed.logs && parsed.logs.length > 0) {
+    if (parsed.actionType === "ADD_LOG" && parsed.log) {
       try {
-        sheetResult = await appendTrainingLogsToSheet(parsed.logs);
+        sheetResult = await appendTrainingLogToSheet(parsed.log);
       } catch (writeErr: any) {
         console.error("寫入 Google Sheets 失敗:", writeErr);
         return NextResponse.json({
-          reply: `解析完成，但寫入 Google Sheet 時遭遇問題（${writeErr.message || "權限不足"}）。請確認 Service Account 已加入試算表共用名單！`,
+          reply: `解析完成，但寫入 Google Sheet 遭遇問題：${writeErr.message || "權限不足"}。請確認 Service Account 具備試算表編輯權限！`,
           actionType: parsed.actionType,
-          logs: parsed.logs,
+          log: parsed.log,
           workout: parsed.workout,
           date: parsed.date,
           sheetSuccess: false,
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       reply: parsed.reply,
       actionType: parsed.actionType,
-      logs: parsed.logs,
+      log: parsed.log,
       workout: parsed.workout,
       date: parsed.date,
       sheetSuccess: true,
