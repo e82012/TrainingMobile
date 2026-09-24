@@ -11,16 +11,22 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
-  Flame,
+  ChevronRight,
 } from "lucide-react";
-import { DashboardData, TrainingLog } from "@/types";
+import { DashboardData, WorkoutPlan, TrainingLog } from "@/types";
 import GeminiAssistantModal from "@/components/GeminiAssistantModal";
+import PlanDetailModal from "@/components/PlanDetailModal";
+import LogDetailModal from "@/components/LogDetailModal";
 
 export default function TrainingMobileApp() {
   const [activeTab, setActiveTab] = useState<"home" | "workout" | "plan" | "logs" | "progress">("home");
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // 彈跳視窗狀態：選取的課表與日誌
+  const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
+  const [selectedLog, setSelectedLog] = useState<TrainingLog | null>(null);
 
   // 抓取儀表板與試算表資料（100% 來自 Google Sheets）
   const loadData = useCallback(async () => {
@@ -48,10 +54,9 @@ export default function TrainingMobileApp() {
   // 當天課表 (Next Workout)
   const currentWorkoutId = data?.status.nextWorkout.workout || Object.keys(data?.plans || {})[0] || "課表";
   const currentWorkoutPlan = data?.plans[currentWorkoutId] || Object.values(data?.plans || {})[0];
-  // 當天課表之主項動作 (Primary Lift) - 動態取自試算表！
   const currentPrimary = currentWorkoutPlan?.primaryExercise;
 
-  // 篩選出歷史上針對「當天主項」或「當天課表」的所有日誌紀錄
+  // 篩選當天主項動作的歷史紀錄
   const currentPrimaryLogs = (data?.logs || []).filter(
     (l) => (currentPrimary?.name && l.mainExercise === currentPrimary.name) || l.workout === currentWorkoutId
   );
@@ -64,7 +69,7 @@ export default function TrainingMobileApp() {
     ? currentPrimaryLogs[currentPrimaryLogs.length - 1].volume || 0
     : 0;
 
-  // Primary Lift 動態 SVG 柱狀圖計算（專門繪製當天主項動作的歷史趨勢）
+  // Primary Lift 動態 SVG 柱狀圖計算
   const renderPrimaryLiftChart = () => {
     if (currentPrimaryLogs.length === 0) {
       return (
@@ -185,7 +190,6 @@ export default function TrainingMobileApp() {
         {/* ==================== 1. 總覽 (Home) ==================== */}
         {activeTab === "home" && (
           <section className="fade-in">
-            {/* Next Workout 卡片 */}
             <div className="card hero">
               <div className="kicker">Next Workout</div>
               <div className="title">{currentWorkoutId}</div>
@@ -201,7 +205,6 @@ export default function TrainingMobileApp() {
               </div>
             </div>
 
-            {/* 滾動循環 Timeline */}
             <div className="card">
               <div className="section-title">
                 <h2>目前循環位置</h2>
@@ -226,7 +229,6 @@ export default function TrainingMobileApp() {
               <p className="tip">不依星期重置；完成哪一課，就從下一課繼續。少練一天也不補課。</p>
             </div>
 
-            {/* 統計概覽 */}
             <div className="grid-stats">
               <div className="stat">
                 <span>週期計畫</span>
@@ -248,7 +250,6 @@ export default function TrainingMobileApp() {
               </div>
             </div>
 
-            {/* Primary Lift 卡片：完全動態對齊「當天訓練主項」 */}
             <section className="card">
               <div className="section-title">
                 <div>
@@ -339,7 +340,7 @@ export default function TrainingMobileApp() {
           </section>
         )}
 
-        {/* ==================== 3. 課表 (Plan) ==================== */}
+        {/* ==================== 3. 課表 (Plan) - 支援點擊查看詳細內容 ==================== */}
         {activeTab === "plan" && (
           <section className="fade-in">
             <div className="card">
@@ -362,36 +363,49 @@ export default function TrainingMobileApp() {
             </div>
 
             <div className="card">
-              <h2>六課循環與主項對照</h2>
+              <div className="section-title">
+                <h2>完整循環課表</h2>
+                <span className="text-[11px] text-[var(--accent)]">點擊卡片查看詳細內容</span>
+              </div>
+
               {Object.values(data?.plans || {}).map((p, idx) => (
-                <div key={p.id} className="row">
-                  <span className="num">0{idx + 1}</span>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <b>{p.name}</b>
-                      {p.primaryExercise && (
-                        <span className="text-[10px] text-[var(--accent)] bg-[var(--accent-bg)] px-1.5 py-0.5 rounded border border-[var(--accent-line)]">
-                          主項: {p.primaryExercise.name}
-                        </span>
-                      )}
-                    </div>
-                    <span className="block text-[11px] text-[var(--muted)]">
-                      {p.category} · {p.exercises.length} 動作
+                <div
+                  key={p.id}
+                  onClick={() => setSelectedPlan(p)}
+                  className="flex items-center justify-between py-3 border-b border-[var(--line)] last:border-b-0 cursor-pointer group hover:bg-[var(--sunken)]/60 px-2 -mx-2 rounded-xl transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="num text-xs font-bold text-[var(--muted)] group-hover:text-[var(--accent)]">
+                      0{idx + 1}
                     </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <b className="group-hover:text-[var(--accent)] transition-colors">{p.name}</b>
+                        {p.primaryExercise && (
+                          <span className="text-[10px] text-[var(--accent)] bg-[var(--accent-bg)] px-1.5 py-0.5 rounded border border-[var(--accent-line)]">
+                            主項: {p.primaryExercise.name}
+                          </span>
+                        )}
+                      </div>
+                      <span className="block text-[11px] text-[var(--muted)]">
+                        {p.category} · {p.exercises.length} 個動作
+                      </span>
+                    </div>
                   </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--muted)] group-hover:text-[var(--accent)] group-hover:translate-x-0.5 transition-all" />
                 </div>
               ))}
             </div>
           </section>
         )}
 
-        {/* ==================== 4. 紀錄 (Logs) ==================== */}
+        {/* ==================== 4. 紀錄 (Logs) - 支援點擊查看詳細內容 ==================== */}
         {activeTab === "logs" && (
           <section className="fade-in">
             <div className="card">
               <div className="section-title">
                 <h2>訓練日誌歷史</h2>
-                <span className="badge">{data?.logs.length || 0} 筆紀錄</span>
+                <span className="text-[11px] text-[var(--accent)]">點擊紀錄可看完整細節</span>
               </div>
 
               {(!data?.logs || data.logs.length === 0) ? (
@@ -411,13 +425,17 @@ export default function TrainingMobileApp() {
                         <th>主項動作</th>
                         <th>工作組明細</th>
                         <th>最高重量</th>
-                        <th>輔助動作</th>
                         <th>充血 / 感受</th>
+                        <th>操作</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.logs.map((row, idx) => (
-                        <tr key={idx}>
+                        <tr
+                          key={idx}
+                          onClick={() => setSelectedLog(row)}
+                          className="cursor-pointer hover:bg-[var(--sunken)]/60 transition-colors"
+                        >
                           <td>{row.date}</td>
                           <td>
                             <span className="font-bold text-[var(--accent)]">{row.workout}</span>
@@ -425,10 +443,14 @@ export default function TrainingMobileApp() {
                           <td className="font-semibold text-[var(--text)]">{row.mainExercise}</td>
                           <td>{row.mainSetsDetail}</td>
                           <td className="text-[var(--blue)] font-bold">{row.maxWeight ? `${row.maxWeight} kg` : "-"}</td>
-                          <td className="text-[var(--muted)] max-w-[140px] truncate">{row.accessoryExercises || "-"}</td>
                           <td>
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--sunken)] text-[var(--orange)] border border-[var(--line)]">
                               {row.pumpLevel || "良好"}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="text-[11px] text-[var(--accent)] flex items-center gap-0.5 font-medium">
+                              詳情 <ChevronRight className="w-3 h-3" />
                             </span>
                           </td>
                         </tr>
@@ -437,7 +459,7 @@ export default function TrainingMobileApp() {
                   </table>
                 </div>
               )}
-              <p className="tip">訓練日誌 100% 與 Google 試算表「訓練日誌」同步。清空試算表此處即為 0 筆，透過 Gemini 助理口語記錄後即時刷新！</p>
+              <p className="tip">訓練日誌 100% 與 Google 試算表「訓練日誌」同步。點擊任一筆日誌可查看 AI 評估、下次建議與身體反饋！</p>
             </div>
           </section>
         )}
@@ -501,6 +523,12 @@ export default function TrainingMobileApp() {
           </section>
         )}
       </main>
+
+      {/* 課表詳細內容彈跳視窗 */}
+      <PlanDetailModal plan={selectedPlan} onClose={() => setSelectedPlan(null)} />
+
+      {/* 訓練日誌詳細內容彈跳視窗 */}
+      <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />
 
       {/* Gemini 智慧對話助理 Modal */}
       <GeminiAssistantModal onDataUpdated={loadData} />
