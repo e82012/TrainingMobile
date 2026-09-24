@@ -11,8 +11,8 @@ interface ConfigStatus {
   googleCredentials: boolean;
   geminiKey: boolean;
   geminiModel: string;
-  sheetIdFromEnv: boolean;
-  sheetUrl: string;
+  googleSheetId: boolean;
+  sheetUrl: string | null;
 }
 
 interface ConfigPanelProps {
@@ -139,8 +139,8 @@ export default function ConfigPanel({ open, onClose, data, lastSyncedAt }: Confi
               <span>{data?.spreadsheetTitle || "-"}</span>
             </div>
             <div className="row">
-              <span>Sheet ID 來源</span>
-              <span>{status ? (status.sheetIdFromEnv ? "環境變數 GOOGLE_SHEET_ID" : "程式內建預設值") : <Skeleton w="4em" h="0.85em" />}</span>
+              <span>GOOGLE_SHEET_ID</span>
+              <span>{status ? <StatusBadge ok={status.googleSheetId} /> : <Skeleton w="4em" h="0.85em" />}</span>
             </div>
             <div className="row">
               <span>上次同步</span>

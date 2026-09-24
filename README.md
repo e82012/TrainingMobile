@@ -93,7 +93,7 @@ npm run dev
 4. 建立完成後，點擊該服務帳戶進入詳情頁，切換到「**金鑰 (Keys)**」分頁：
    - 點擊「新增金鑰」>「建立新的金鑰」> 選擇 **JSON** 並下載。
 5. **重要步驟（共用權限）**：
-   - 開啟您的 [Google 試算表](https://docs.google.com/spreadsheets/d/your_google_sheet_id_here/edit)。
+   - 開啟您的 Google 試算表。
    - 點擊右上角「**共用**」。
    - 將剛才建立的服務帳戶 Email（如 `xxx@xxx.iam.gserviceaccount.com`）新增為 **「編輯者」**。
 6. 將下載的 JSON 檔案中的 `client_email` 與 `private_key` 貼到 `.env.local` 即可！

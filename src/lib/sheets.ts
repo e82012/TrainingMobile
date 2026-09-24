@@ -25,8 +25,13 @@ export function getSheetsClient() {
   return google.sheets({ version: "v4", auth });
 }
 
+// 只從環境變數讀取；未設定時直接報錯，不退回任何寫死的試算表
 export function getSpreadsheetId(): string {
-  return process.env.GOOGLE_SHEET_ID || "your_google_sheet_id_here";
+  const id = process.env.GOOGLE_SHEET_ID?.trim();
+  if (!id) {
+    throw new Error("尚未設定 GOOGLE_SHEET_ID，請於環境變數配置");
+  }
+  return id;
 }
 
 function parseSetsAndCalculateVolume(detailStr: string, maxKg: number): { sets: [number, number][]; volume: number } {
