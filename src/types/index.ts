@@ -28,6 +28,7 @@ export interface WorkoutPlan {
   name: string; // Push A
   category?: string; // 訓練部位
   description: string;
+  primaryExercise?: WorkoutExercise; // 當天該課表之主項動作
   exercises: WorkoutExercise[];
 }
 
@@ -49,6 +50,8 @@ export interface PrimaryLiftSession {
   sets: [number, number][];
   volume?: number;
   maxWeight?: number;
+  workout?: string;
+  exercise?: string;
 }
 
 export interface DashboardData {
@@ -59,11 +62,6 @@ export interface DashboardData {
     id: string;
   };
   status: CycleStatus;
-  primaryLift: {
-    name: string;
-    target: string;
-    sessions: PrimaryLiftSession[];
-  };
   plans: Record<string, WorkoutPlan>;
   logs: TrainingLog[];
   spreadsheetTitle?: string;

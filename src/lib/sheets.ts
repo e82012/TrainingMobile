@@ -1,5 +1,5 @@
 import { google } from "googleapis";
-import { DashboardData, TrainingLog, WorkoutPlan, PrimaryLiftSession } from "@/types";
+import { DashboardData, TrainingLog, WorkoutPlan, PrimaryLiftSession, WorkoutExercise } from "@/types";
 
 export function getSheetsClient() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -56,7 +56,7 @@ function parseSetsAndCalculateVolume(detailStr: string, maxKg: number): { sets: 
   return { sets, volume };
 }
 
-// 讀取儀表板完整資料：100% 來自 Google 試算表，無任何寫死課表與紀錄！
+// 讀取儀表板完整資料：100% 來自 Google 試算表
 export async function fetchDashboardData(): Promise<DashboardData> {
   const sheets = getSheetsClient();
   const spreadsheetId = getSpreadsheetId();
@@ -114,21 +114,32 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       }
 
       const isPrimary = type === "主項";
-      plans[workoutName].exercises.push({
+      const exerciseObj: WorkoutExercise = {
         name: exerciseName,
         type,
         sets: sets || "3–4 組",
         notes: notes || (isPrimary ? "主項動作" : "輔助動作"),
         isPrimary,
-      });
+      };
 
-      if (isPrimary) {
+      plans[workoutName].exercises.push(exerciseObj);
+
+      // 動態設定該課表的主項動作 (Primary Lift)
+      if (isPrimary && !plans[workoutName].primaryExercise) {
+        plans[workoutName].primaryExercise = exerciseObj;
         plans[workoutName].description = `${category} · ${exerciseName} 為主項`;
       }
     }
   }
 
-  // 3. 解析訓練日誌 (100% 來自試算表，無任何寫死紀錄)
+  // 若某課表沒特別標記主項，預設取第一個動作
+  Object.values(plans).forEach((p) => {
+    if (!p.primaryExercise && p.exercises.length > 0) {
+      p.primaryExercise = p.exercises[0];
+    }
+  });
+
+  // 3. 解析訓練日誌 (100% 來自試算表)
   const logs: TrainingLog[] = [];
   if (logRes?.data.values && logRes.data.values.length > 0) {
     for (const row of logRes.data.values) {
@@ -159,22 +170,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     }
   }
 
-  // 4. Primary Lift Sessions 與圖表 (100% 來自日誌)
-  const primarySessions: PrimaryLiftSession[] = [];
-  logs.forEach((l) => {
-    if (l.mainExercise) {
-      const { sets, volume } = parseSetsAndCalculateVolume(l.mainSetsDetail, l.maxWeight);
-      primarySessions.push({
-        date: l.date.replace(/-/g, ""),
-        sets: sets.length > 0 ? sets : [[l.maxWeight || 0, 8]],
-        volume: volume || (l.maxWeight ? l.maxWeight * 8 * 4 : 0),
-        maxWeight: l.maxWeight,
-      });
-    }
-  });
-
-  // 5. 滾動循環推算
-  const cycle = cycleList.length > 0 ? cycleList : ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"];
+  // 4. 滾動循環推算
+  const cycle = cycleList.length > 0 ? cycleList : Object.keys(plans);
   let lastWorkoutName = "無紀錄";
   let lastDate = "尚未開始";
   let nextIdx = 0;
@@ -189,11 +186,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     }
   }
 
-  const nextWorkoutName = cycle[nextIdx] || "Push A";
-  const defaultPrimaryExercise =
-    plans[nextWorkoutName]?.exercises.find((e) => e.isPrimary)?.name ||
-    logs[logs.length - 1]?.mainExercise ||
-    "主項動作";
+  const nextWorkoutName = cycle[nextIdx] || Object.keys(plans)[0] || "Push A";
 
   return {
     planMeta: {
@@ -211,18 +204,13 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       cycle,
       currentIndex: nextIdx,
     },
-    primaryLift: {
-      name: defaultPrimaryExercise,
-      target: plans[nextWorkoutName]?.exercises.find((e) => e.isPrimary)?.sets || "4 組",
-      sessions: primarySessions,
-    },
     plans,
     logs,
     spreadsheetTitle,
   };
 }
 
-// 寫入訓練日誌到 Google Sheets「訓練日誌」表
+// 寫入訓練日誌到 Google Sheets
 export async function appendTrainingLogToSheet(log: TrainingLog) {
   const sheets = getSheetsClient();
   const spreadsheetId = getSpreadsheetId();
