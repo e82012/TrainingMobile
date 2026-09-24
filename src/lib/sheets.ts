@@ -1,5 +1,7 @@
 import { google } from "googleapis";
 import { DashboardData, TrainingLog, WorkoutPlan, PrimaryLiftSession, WorkoutExercise } from "@/types";
+import { PLAN_SHEET, LOG_SHEET, cell, orderedColumns } from "@/lib/sheetSchema";
+import { parseWorkSets } from "@/lib/workoutInput";
 
 export function getSheetsClient() {
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -28,19 +30,8 @@ export function getSpreadsheetId(): string {
 }
 
 function parseSetsAndCalculateVolume(detailStr: string, maxKg: number): { sets: [number, number][]; volume: number } {
-  const sets: [number, number][] = [];
-  const matches = detailStr.match(/(\d+)\s*[x×*]\s*(\d+)/gi);
-
-  if (matches) {
-    for (const m of matches) {
-      const parts = m.split(/[x×*]/i);
-      const kg = parseInt(parts[0], 10);
-      const reps = parseInt(parts[1], 10);
-      if (!isNaN(kg) && !isNaN(reps)) {
-        sets.push([kg, reps]);
-      }
-    }
-  }
+  // 與寫入驗證共用同一套解析；下方「N組M下」的估算僅為相容既有的舊紀錄
+  const sets: [number, number][] = parseWorkSets(detailStr);
 
   if (sets.length === 0 && detailStr.includes("組")) {
     const numSetsMatch = detailStr.match(/(\d+)\s*組/);
@@ -68,8 +59,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   // 1. 同步從試算表抓取表資訊、課表、訓練日誌
   const [sheetMeta, planRes, logRes] = await Promise.all([
     sheets.spreadsheets.get({ spreadsheetId }),
-    sheets.spreadsheets.values.get({ spreadsheetId, range: "訓練課表!A2:J" }).catch(() => null),
-    sheets.spreadsheets.values.get({ spreadsheetId, range: "訓練日誌!A2:L" }).catch(() => null),
+    sheets.spreadsheets.values.get({ spreadsheetId, range: PLAN_SHEET.range }).catch(() => null),
+    sheets.spreadsheets.values.get({ spreadsheetId, range: LOG_SHEET.range }).catch(() => null),
   ]);
 
   const spreadsheetTitle = sheetMeta.data.properties?.title || "Workout Tracker";
@@ -84,19 +75,20 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   let planId = "260922";
 
   if (planRes?.data.values && planRes.data.values.length > 0) {
+    const P = PLAN_SHEET.columns;
     const firstRow = planRes.data.values[0];
-    planCreatedAt = String(firstRow[0] || planCreatedAt).trim();
-    planTitle = String(firstRow[1] || planTitle).trim();
-    planId = String(firstRow[2] || planId).trim();
-    planWeeks = String(firstRow[3] || planWeeks).trim();
+    planCreatedAt = cell(firstRow, P.createdAt) || planCreatedAt;
+    planTitle = cell(firstRow, P.title) || planTitle;
+    planId = cell(firstRow, P.planId) || planId;
+    planWeeks = cell(firstRow, P.weeks) || planWeeks;
 
     for (const row of planRes.data.values) {
-      const workoutName = String(row[4] || "").trim(); // E: 課表名稱 (如 Push A)
-      const category = String(row[5] || "").trim(); // F: 訓練部位
-      const exerciseName = String(row[6] || "").trim(); // G: 動作名稱
-      const type = String(row[7] || "").trim(); // H: 類型 (主項 / 輔助)
-      const sets = String(row[8] || "").trim(); // I: 目標組數與次數
-      const notes = String(row[9] || "").trim(); // J: 下一階段目標
+      const workoutName = cell(row, P.workoutName);
+      const category = cell(row, P.category);
+      const exerciseName = cell(row, P.exerciseName);
+      const type = cell(row, P.type);
+      const sets = cell(row, P.sets);
+      const notes = cell(row, P.notes);
 
       if (!workoutName || !exerciseName) continue;
 
@@ -142,29 +134,30 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   // 3. 解析訓練日誌 (100% 來自試算表)
   const logs: TrainingLog[] = [];
   if (logRes?.data.values && logRes.data.values.length > 0) {
+    const L = LOG_SHEET.columns;
     for (const row of logRes.data.values) {
-      const date = String(row[0] || "").trim();
-      const workout = String(row[2] || "").trim();
-      const mainExercise = String(row[3] || "").trim();
+      const date = cell(row, L.date);
+      const workout = cell(row, L.workout);
+      const mainExercise = cell(row, L.mainExercise);
       if (!date && !workout && !mainExercise) continue;
 
-      const maxWeight = parseFloat(row[5]) || 0;
-      const mainSetsDetail = String(row[4] || "");
+      const maxWeight = parseFloat(cell(row, L.maxWeight)) || 0;
+      const mainSetsDetail = cell(row, L.mainSetsDetail);
       const { volume } = parseSetsAndCalculateVolume(mainSetsDetail, maxWeight);
 
       logs.push({
         date,
-        planId: String(row[1] || planId),
+        planId: cell(row, L.planId) || planId,
         workout,
         mainExercise,
         mainSetsDetail,
         maxWeight,
-        accessoryExercises: String(row[6] || ""),
-        pumpLevel: String(row[7] || ""),
-        muscleFeeling: String(row[8] || ""),
-        fatigueLevel: String(row[9] || ""),
-        aiSummary: String(row[10] || ""),
-        aiNextSuggestion: String(row[11] || ""),
+        accessoryExercises: cell(row, L.accessoryExercises),
+        pumpLevel: cell(row, L.pumpLevel),
+        muscleFeeling: cell(row, L.muscleFeeling),
+        fatigueLevel: cell(row, L.fatigueLevel),
+        aiSummary: cell(row, L.aiSummary),
+        aiNextSuggestion: cell(row, L.aiNextSuggestion),
         volume,
       });
     }
@@ -180,7 +173,9 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     const latest = logs[logs.length - 1];
     if (latest.workout) {
       lastWorkoutName = latest.workout;
-      lastDate = latest.date.replace(/-/g, "").slice(-6);
+      // YYYY-MM-DD 顯示成 MM/DD；非標準格式就原樣呈現
+      const ymd = latest.date.match(/^\d{4}-(\d{2})-(\d{2})$/);
+      lastDate = ymd ? `${ymd[1]}/${ymd[2]}` : latest.date;
       const lastIdx = cycle.indexOf(lastWorkoutName);
       nextIdx = lastIdx >= 0 ? (lastIdx + 1) % cycle.length : 0;
     }
@@ -219,24 +214,26 @@ export async function appendTrainingLogToSheet(log: TrainingLog) {
     throw new Error("未配置 Google Service Account，無法寫入試算表");
   }
 
-  const rowValues = [
-    log.date,
-    log.planId || "260922",
-    log.workout,
-    log.mainExercise,
-    log.mainSetsDetail,
-    log.maxWeight || 0,
-    log.accessoryExercises || "",
-    log.pumpLevel || "佳",
-    log.muscleFeeling || "良好",
-    log.fatigueLevel || "中等",
-    log.aiSummary || "",
-    log.aiNextSuggestion || "",
-  ];
+  // 依 schema 的欄位字母順序排出整列，欄位調整時只需改 sheetSchema.ts
+  const values: Record<keyof typeof LOG_SHEET.columns, string | number> = {
+    date: log.date,
+    planId: log.planId || "260922",
+    workout: log.workout,
+    mainExercise: log.mainExercise,
+    mainSetsDetail: log.mainSetsDetail,
+    maxWeight: log.maxWeight || 0,
+    accessoryExercises: log.accessoryExercises || "",
+    pumpLevel: log.pumpLevel || "",
+    muscleFeeling: log.muscleFeeling || "",
+    fatigueLevel: log.fatigueLevel || "",
+    aiSummary: log.aiSummary || "",
+    aiNextSuggestion: log.aiNextSuggestion || "",
+  };
+  const rowValues = orderedColumns(LOG_SHEET.columns).map(([key]) => values[key]);
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: "訓練日誌!A:L",
+    range: LOG_SHEET.appendRange,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [rowValues],

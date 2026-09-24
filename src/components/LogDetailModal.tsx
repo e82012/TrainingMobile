@@ -3,6 +3,7 @@
 import React from "react";
 import { X, Calendar, Flame, Activity, Zap, Sparkles, Lightbulb } from "lucide-react";
 import { TrainingLog } from "@/types";
+import { useModalBehavior } from "@/lib/useModalBehavior";
 
 interface LogDetailModalProps {
   log: TrainingLog | null;
@@ -10,10 +11,15 @@ interface LogDetailModalProps {
 }
 
 export default function LogDetailModal({ log, onClose }: LogDetailModalProps) {
+  useModalBehavior(Boolean(log), onClose);
+
   if (!log) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div
         className="w-full sm:max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-t-[24px] sm:rounded-[24px] flex flex-col max-h-[85vh] shadow-2xl overflow-hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
@@ -49,22 +55,23 @@ export default function LogDetailModal({ log, onClose }: LogDetailModalProps) {
           <div className="p-4 rounded-xl bg-[var(--sunken)] border border-[var(--line)] space-y-2.5">
             <div className="flex items-center justify-between">
               <div className="eyebrow text-[var(--accent)]">主項複合動作</div>
-              {log.volume && log.volume > 0 && (
+              {(log.volume ?? 0) > 0 && (
                 <span className="text-xs text-[var(--blue)] font-bold">
-                  總 Volume: {log.volume.toLocaleString()} kg
+                  總 Volume: {(log.volume ?? 0).toLocaleString()} kg
                 </span>
               )}
             </div>
             <h4 className="text-lg font-bold text-[var(--text)]">{log.mainExercise}</h4>
 
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--line)]">
+            {/* 工作組明細是最關鍵的資訊，獨立一整列並允許換行，不做截斷 */}
+            <div className="space-y-2 pt-2 border-t border-[var(--line)]">
               <div className="bg-[var(--card)] p-2.5 rounded-lg border border-[var(--line)]">
                 <span className="text-[11px] text-[var(--muted)] block">最高訓練重量</span>
-                <b className="text-base text-[var(--accent)] font-bold">{log.maxWeight} kg</b>
+                <b className="text-base text-[var(--accent)] font-bold">{log.maxWeight ? `${log.maxWeight} kg` : "-"}</b>
               </div>
               <div className="bg-[var(--card)] p-2.5 rounded-lg border border-[var(--line)]">
                 <span className="text-[11px] text-[var(--muted)] block">工作組明細</span>
-                <b className="text-xs text-[var(--text)] block truncate">{log.mainSetsDetail || "-"}</b>
+                <b className="text-xs text-[var(--text)] block break-words leading-relaxed">{log.mainSetsDetail || "-"}</b>
               </div>
             </div>
           </div>
@@ -85,19 +92,19 @@ export default function LogDetailModal({ log, onClose }: LogDetailModalProps) {
               <div className="flex items-center justify-center gap-1 text-[11px] text-[var(--orange)] mb-1">
                 <Flame className="w-3.5 h-3.5" /> 充血度
               </div>
-              <b className="text-xs text-[var(--text)]">{log.pumpLevel || "良好"}</b>
+              <b className="text-xs text-[var(--text)]">{log.pumpLevel || "-"}</b>
             </div>
             <div className="p-2.5 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-center">
               <div className="flex items-center justify-center gap-1 text-[11px] text-[var(--accent)] mb-1">
                 <Activity className="w-3.5 h-3.5" /> 肌群感受
               </div>
-              <b className="text-xs text-[var(--text)] truncate block">{log.muscleFeeling || "刺激充分"}</b>
+              <b className="text-xs text-[var(--text)] truncate block">{log.muscleFeeling || "-"}</b>
             </div>
             <div className="p-2.5 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-center">
               <div className="flex items-center justify-center gap-1 text-[11px] text-[var(--blue)] mb-1">
                 <Zap className="w-3.5 h-3.5" /> 疲勞度
               </div>
-              <b className="text-xs text-[var(--text)]">{log.fatigueLevel || "中等"}</b>
+              <b className="text-xs text-[var(--text)]">{log.fatigueLevel || "-"}</b>
             </div>
           </div>
 

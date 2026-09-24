@@ -3,6 +3,7 @@
 import React from "react";
 import { X } from "lucide-react";
 import { WorkoutPlan } from "@/types";
+import { useModalBehavior } from "@/lib/useModalBehavior";
 
 interface PlanDetailModalProps {
   plan: WorkoutPlan | null;
@@ -10,10 +11,15 @@ interface PlanDetailModalProps {
 }
 
 export default function PlanDetailModal({ plan, onClose }: PlanDetailModalProps) {
+  useModalBehavior(Boolean(plan), onClose);
+
   if (!plan) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm transition-opacity"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div
         className="w-full sm:max-w-lg bg-[var(--card)] border border-[var(--line)] rounded-t-[24px] sm:rounded-[24px] flex flex-col max-h-[85vh] shadow-2xl overflow-hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}

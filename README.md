@@ -18,7 +18,7 @@
 
 3. **Google Sheets 雲端資料庫**：
    - 使用您指定的 Google 試算表作為資料庫，所有歷史紀錄與數據全都在自己的 Google 雲端硬碟，透明且安全。
-   - 具備**展示模式（Demo Fallback）**：即使尚未設定 Google 憑證或離線，專案也能順暢運作不崩潰。
+   - 未設定 GEMINI_API_KEY 或解析失敗時，一律回報錯誤且不寫入試算表，確保日誌內容都來自實際解析結果。
 
 4. **Vercel 一鍵無痛部署**：
    - 伺服器端 API 路由安全保護 `GEMINI_API_KEY` 與 Google 服務帳戶私鑰，杜絕機密外洩。
@@ -46,6 +46,8 @@ cp .env.example .env.local
 ```env
 # 1. Google Gemini API Key（前往 https://aistudio.google.com/ 免費獲取）
 GEMINI_API_KEY=your_gemini_api_key_here
+# 選填：Gemini 模型名稱，預設 gemini-2.5-flash
+# GEMINI_MODEL=gemini-2.5-flash
 
 # 2. 目標 Google Sheet ID（網址 /d/ 與 /edit 之間的那段代碼）
 GOOGLE_SHEET_ID=your_google_sheet_id_here
@@ -53,6 +55,9 @@ GOOGLE_SHEET_ID=your_google_sheet_id_here
 # 3. Google Cloud Service Account 憑證（見下方設定步驟）
 GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+
+# 4. 入口密碼（必填，未設定時所有頁面與 API 一律拒絕存取）
+APP_PASSWORD=your_entry_password_here
 ```
 
 ### 3. 本地啟動預覽
@@ -61,7 +66,18 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\
 npm run dev
 ```
 
-開啟瀏覽器前往 [http://localhost:3000](http://localhost:3000) 即可看到專案！
+開啟瀏覽器前往 [http://localhost:3000](http://localhost:3000)，輸入入口密碼後即可使用。
+
+---
+
+## 🔒 入口密碼
+
+所有頁面與 API（含 `/api/data`、`/api/chat`、`/api/config`）都需先通過入口密碼。
+
+- 登入時前端自動帶上當天日期（台北時間），後端確認密碼正確且日期與伺服器一致後，發出 httpOnly cookie
+- token 為 `日期 + HMAC-SHA256(key=APP_PASSWORD, msg=日期)`，每次請求都以伺服器的台北日期重新計算比對，**跨日即失效**，需重新輸入密碼
+- 修改 `APP_PASSWORD` 後，所有已發出的 token 立即失效
+- 未設定 `APP_PASSWORD` 時一律拒絕存取
 
 ---
 
@@ -88,9 +104,18 @@ npm run dev
 
 1. 將專案推送到 GitHub / GitLab。
 2. 登入 [Vercel](https://vercel.com/)，點擊 **Add New Project** 並匯入該 Repository。
-3. 在 **Environment Variables** 區域新增下列 4 個環境變數：
+3. 在 **Environment Variables** 區域新增下列 5 個環境變數：
+   - `APP_PASSWORD`
    - `GEMINI_API_KEY`
    - `GOOGLE_SHEET_ID`
    - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
    - `GOOGLE_PRIVATE_KEY`（請確保保留前後引號或換行字元）
 4. 點擊 **Deploy**，約 1 分鐘後即可上線！
+
+---
+**最後更新**: 2026-09-24
+**維護者**: 開發團隊
+**文件版本**: v2.0
+**變更記錄**（里程碑，最多 5 條）:
+- v2.0 (2026-09-24): 新增入口密碼機制，所有頁面與 API 需登入，token 僅當日（台北時間）有效；新增必填環境變數 APP_PASSWORD
+- v1.0 (2026-09-24): 移除 Gemini 模擬解析，未設定金鑰或解析失敗時不寫入試算表；新增選填環境變數 GEMINI_MODEL

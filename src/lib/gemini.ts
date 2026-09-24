@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { TrainingLog } from "@/types";
+import { TrainingLog, WorkoutPlan } from "@/types";
+import { getTaipeiDate } from "@/lib/auth";
 
 export interface ParsedWorkoutResponse {
   reply: string;
@@ -9,148 +10,131 @@ export interface ParsedWorkoutResponse {
   log: TrainingLog;
 }
 
-export async function parseWorkoutChat(userPrompt: string): Promise<ParsedWorkoutResponse> {
+// 解析時需要的試算表現況：課表名稱與主項必須從這裡取，不可由模型自行發明
+export interface WorkoutChatContext {
+  plans: Record<string, WorkoutPlan>;
+  nextWorkout: string;
+  planId: string;
+  lastLogDate?: string;
+}
+
+// 實際呼叫與組態頁共用同一個來源，避免顯示的模型與實際使用的不一致
+export function getGeminiModelName(): string {
+  return process.env.GEMINI_MODEL || "gemini-2.5-flash";
+}
+
+function describePlans(plans: Record<string, WorkoutPlan>): string {
+  return Object.values(plans)
+    .map((p) => {
+      const list = p.exercises.map((ex, i) => `${i + 1}. ${ex.name}${ex.isPrimary ? "（主項）" : ""}`).join("；");
+      return `- ${p.name}｜主項：${p.primaryExercise?.name ?? "未設定"}｜動作順序：${list}`;
+    })
+    .join("\n");
+}
+
+// 規則對應 docs/sheet-writing-rules.md 第 3、4 節
+function buildSystemInstruction(ctx: WorkoutChatContext, today: string): string {
+  return `你是專業且熱血的健身教練兼訓練日誌助手。使用者會用口語或簡寫告訴你今天的訓練內容，你要解析成 JSON，供程式寫入 Google 試算表「訓練日誌」。
+
+【目前課表】名稱必須逐字照抄，不可自行改寫、簡稱或翻譯：
+${describePlans(ctx.plans)}
+- 下一課：${ctx.nextWorkout}
+- 課表計畫 id：${ctx.planId}
+- 今天：${today}
+- 最後一筆日誌日期：${ctx.lastLogDate || "無"}
+
+【欄位規則】
+1. log.date：YYYY-MM-DD。使用者沒說日期就用今天 ${today}；不可早於最後一筆日誌日期。
+2. log.planId：固定為 "${ctx.planId}"。
+3. log.workout：必須是【目前課表】中的名稱之一。使用者沒說課表時，依提到的動作判斷；仍無法判斷就用下一課「${ctx.nextWorkout}」。
+4. log.mainExercise：必須等於該課表「主項」的名稱，逐字相同。
+5. log.mainSetsDetail：只描述主項，格式為「重量×次數」或「重量×次數×組數」，重量在前、單位 kg，多組以「, 」分隔。例："50kg×8, 55kg×8, 55kg×8" 或 "23.5kg×8×4"。不可寫成「4組×8下」這類缺少重量的格式。
+6. log.maxWeight：主項明細中的最大重量，純數字。
+7. log.accessoryExercises：輔助動作，格式「動作名稱 重量×次數×組數」，多個以「、」分隔；動作名稱優先使用該課表中的名稱。
+8. log.pumpLevel、log.muscleFeeling、log.fatigueLevel：使用者有提到才填簡短文字，沒提到就填空字串。
+9. log.aiSummary：一句話總結今天的強度與品質。
+10. log.aiNextSuggestion：一句話建議下次同一課表如何微幅漸進。
+11. reply：台灣繁體中文、熱血親切的教練語氣，簡短肯定使用者的付出。
+
+【簡寫】
+- 以「【已對應課表】」開頭的行，已由程式把使用者的簡寫對應到課表動作，動作名稱與數字完全以該行為準，不可更改。
+- 「重量 次數*組數」例如「50 8*4」代表 50kg、8 下、4 組。
+
+【不確定時】
+- 任何數字或名稱不確定，就填空字串，不可猜測或填預設值。
+- 無法確定課表、主項重量或次數時，actionType 改為 "CHAT"，在 reply 中具體說明缺少什麼並請使用者補充。
+- 使用者只是聊天或提問、不是回報訓練時，actionType 為 "CHAT"。
+
+【輸出】嚴格合法的 JSON：
+{
+  "actionType": "ADD_LOG",
+  "reply": "教練回覆",
+  "log": {
+    "date": "${today}",
+    "planId": "${ctx.planId}",
+    "workout": "課表名稱",
+    "mainExercise": "該課表主項名稱",
+    "mainSetsDetail": "50kg×8, 55kg×8, 55kg×8",
+    "maxWeight": 55,
+    "accessoryExercises": "動作名稱 50kg×10×4、動作名稱 15kg×12×3",
+    "pumpLevel": "",
+    "muscleFeeling": "",
+    "fatigueLevel": "",
+    "aiSummary": "一句話總結",
+    "aiNextSuggestion": "一句話建議"
+  }
+}`;
+}
+
+export async function parseWorkoutChat(userPrompt: string, ctx: WorkoutChatContext): Promise<ParsedWorkoutResponse> {
   const apiKey = process.env.GEMINI_API_KEY;
+  const today = getTaipeiDate();
 
-  // 今天 YYYY-MM-DD
-  const todayStr = new Intl.DateTimeFormat("zh-TW", {
-    timeZone: "Asia/Taipei",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
-    .format(new Date())
-    .replace(/\//g, "-");
-
+  // 沒有 key 就直接擋下，不用規則模擬——模擬出來的資料會被當真寫進試算表
   if (!apiKey) {
-    console.warn("未設定 GEMINI_API_KEY，採用智慧模擬解析器");
-    return mockParseWorkout(userPrompt, todayStr);
+    throw new Error("尚未設定 GEMINI_API_KEY，無法解析訓練內容（未寫入試算表）");
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: getGeminiModelName(),
     generationConfig: {
       responseMimeType: "application/json",
       temperature: 0.2,
     },
-    systemInstruction: `你是一位專業且熱血的健身教練兼訓練日誌助手。使用者會用口語告訴你今天的訓練內容。
-你的任務是精確解析使用者的輸入，整理成標準 JSON 格式以寫入 Google Sheets「訓練日誌」工作表。
-
-【Google Sheet 欄位對應規範】
-1. date: 日期字串，格式為 YYYY-MM-DD。若使用者未指定，請預設為今日：${todayStr}。
-2. planId: 課表計畫代號，預設固定為 "260922"。
-3. workout: 課表名稱，必須為標準名稱（Push A、Pull A、Legs A、Push B、Pull B、Legs B 之一）。若沒說，請依動作部位合理推斷。
-4. mainExercise: 該次訓練最重要的主項複合動作（例如：上斜槓鈴臥推、高位下拉／引體向上、深蹲、站姿肩推、槓鈴划船、硬舉等）。
-5. mainSetsDetail: 主項工作組明細，例如 "50x8 / 55x8 / 55x8 / 50x8" 或 "4組x8下"。
-6. maxWeight: 主項所使用的最高重量數值 (單位 kg，純數字)。
-7. accessoryExercises: 輔助動作清單與組數描述（例如 "機械平胸推 3組、啞鈴側平舉 10kg 15x3、機械下胸Dip"）。
-8. pumpLevel: 充血度（"極佳"、"良好"、"普通"）。
-9. muscleFeeling: 目標肌群感受度評估（例如 "上胸與側三角充血顯著"、"背闊肌離心拉伸感強烈"）。
-10. fatigueLevel: 疲勞度評估（"低"、"中等"、"偏高"）。
-11. aiSummary: AI 評估摘要（精簡一句話總結今日訓練強度與品質）。
-12. aiNextSuggestion: 下次行動建議（一句話指導下次同一課表如何微幅漸進超負荷或微調）。
-13. reply: 用台灣繁體中文、熱血且親切的教練語氣回覆使用者，簡短肯定今天的付出！
-
-請輸出嚴格合法的 JSON 物件：
-{
-  "actionType": "ADD_LOG",
-  "workout": "Push A",
-  "date": "${todayStr}",
-  "reply": "教練回覆",
-  "log": {
-    "date": "${todayStr}",
-    "planId": "260922",
-    "workout": "Push A",
-    "mainExercise": "上斜槓鈴臥推",
-    "mainSetsDetail": "50x8 / 55x8 / 55x8 / 50x8",
-    "maxWeight": 55,
-    "accessoryExercises": "機械平胸推 3組、啞鈴側平舉 10kg 15x3",
-    "pumpLevel": "極佳",
-    "muscleFeeling": "上胸刺激充分",
-    "fatigueLevel": "中等",
-    "aiSummary": "主項負重維持高標，動作品質良好",
-    "aiNextSuggestion": "下次可嘗試第1組直接從 55kg 起跳挑戰 4 組全滿"
-  }
-}`,
+    systemInstruction: buildSystemInstruction(ctx, today),
   });
 
+  let data: any;
   try {
     const result = await model.generateContent(userPrompt);
-    const text = result.response.text();
-    const data = JSON.parse(text);
-
-    return {
-      actionType: data.actionType || "ADD_LOG",
-      workout: data.workout || "Push A",
-      date: data.date || todayStr,
-      reply: data.reply || "太棒了！已將今天的訓練紀錄整理完畢並記錄下來！💪",
-      log: {
-        date: data.log?.date || todayStr,
-        planId: data.log?.planId || "260922",
-        workout: data.log?.workout || data.workout || "Push A",
-        mainExercise: data.log?.mainExercise || "主項訓練",
-        mainSetsDetail: data.log?.mainSetsDetail || "4組完成",
-        maxWeight: Number(data.log?.maxWeight) || 50,
-        accessoryExercises: data.log?.accessoryExercises || "",
-        pumpLevel: data.log?.pumpLevel || "良好",
-        muscleFeeling: data.log?.muscleFeeling || "刺激充分",
-        fatigueLevel: data.log?.fatigueLevel || "中等",
-        aiSummary: data.log?.aiSummary || "順利完成排定組數",
-        aiNextSuggestion: data.log?.aiNextSuggestion || "下次維持負重穩定推進",
-      },
-    };
-  } catch (err) {
-    console.error("Gemini 解析失敗，回退至備用解析:", err);
-    return mockParseWorkout(userPrompt, todayStr);
-  }
-}
-
-function mockParseWorkout(prompt: string, today: string): ParsedWorkoutResponse {
-  let workout = "Push A";
-  let mainExercise = "上斜槓鈴臥推";
-  let maxWeight = 55;
-
-  if (prompt.includes("拉") || prompt.includes("背") || prompt.includes("Pull")) {
-    workout = prompt.includes("B") ? "Pull B" : "Pull A";
-    mainExercise = workout === "Pull A" ? "高位下拉／引體向上" : "俯身槓鈴划船";
-    maxWeight = 50;
-  } else if (prompt.includes("腿") || prompt.includes("蹲") || prompt.includes("Leg")) {
-    workout = prompt.includes("B") ? "Legs B" : "Legs A";
-    mainExercise = workout === "Legs A" ? "深蹲" : "硬舉";
-    maxWeight = 80;
-  } else if (prompt.includes("肩") || prompt.includes("Push B")) {
-    workout = "Push B";
-    mainExercise = "站姿槓鈴肩推";
-    maxWeight = 40;
+    data = JSON.parse(result.response.text());
+  } catch (err: any) {
+    console.error("Gemini 解析失敗:", err);
+    throw new Error(`Gemini 解析失敗，未寫入試算表：${err?.message || "未知錯誤"}`);
   }
 
-  // 嘗試抓取重量數字
-  const weightMatch = prompt.match(/(\d+)\s*(kg|公斤)/i);
-  if (weightMatch) {
-    maxWeight = parseInt(weightMatch[1], 10);
-  }
-
-  const log: TrainingLog = {
-    date: today,
-    planId: "260922",
-    workout,
-    mainExercise,
-    mainSetsDetail: `${maxWeight}kg 工作組完成`,
-    maxWeight,
-    accessoryExercises: prompt.length > 15 ? prompt : "輔助動作全數完成",
-    pumpLevel: "極佳",
-    muscleFeeling: "目標肌群充血顯著",
-    fatigueLevel: "中等",
-    aiSummary: `成功完成 ${workout} 訓練，主項動作品質維持水準`,
-    aiNextSuggestion: "下次可嘗試挑戰微幅增重 2.5kg",
-  };
+  const log = data.log || {};
+  const str = (v: unknown) => String(v ?? "").trim();
 
   return {
-    actionType: "ADD_LOG",
-    workout,
-    date: today,
-    reply: `這波很扎實！已成功為你記錄 ${workout} 的訓練日誌（主項：${mainExercise}，最高重量：${maxWeight}kg）。已成功同步至 Google Sheet！🔥`,
-    log,
+    actionType: data.actionType === "ADD_LOG" ? "ADD_LOG" : "CHAT",
+    workout: str(log.workout),
+    date: str(log.date) || today,
+    reply: str(data.reply),
+    log: {
+      date: str(log.date) || today,
+      planId: str(log.planId) || ctx.planId,
+      workout: str(log.workout),
+      mainExercise: str(log.mainExercise),
+      mainSetsDetail: str(log.mainSetsDetail),
+      maxWeight: Number(log.maxWeight) || 0,
+      accessoryExercises: str(log.accessoryExercises),
+      pumpLevel: str(log.pumpLevel),
+      muscleFeeling: str(log.muscleFeeling),
+      fatigueLevel: str(log.fatigueLevel),
+      aiSummary: str(log.aiSummary),
+      aiNextSuggestion: str(log.aiNextSuggestion),
+    },
   };
 }

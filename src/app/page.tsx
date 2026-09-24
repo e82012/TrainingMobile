@@ -9,14 +9,16 @@ import {
   TrendingUp,
   RefreshCw,
   Sparkles,
-  CheckCircle2,
   AlertCircle,
   ChevronRight,
+  Settings,
 } from "lucide-react";
 import { DashboardData, WorkoutPlan, TrainingLog } from "@/types";
 import GeminiAssistantModal from "@/components/GeminiAssistantModal";
 import PlanDetailModal from "@/components/PlanDetailModal";
 import LogDetailModal from "@/components/LogDetailModal";
+import ConfigPanel from "@/components/ConfigPanel";
+import Skeleton from "@/components/Skeleton";
 
 export default function TrainingMobileApp() {
   const [activeTab, setActiveTab] = useState<"home" | "workout" | "plan" | "logs" | "progress">("home");
@@ -27,6 +29,11 @@ export default function TrainingMobileApp() {
   // 彈跳視窗狀態：選取的課表與日誌
   const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
   const [selectedLog, setSelectedLog] = useState<TrainingLog | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const closeConfig = useCallback(() => setConfigOpen(false), []);
+  // 只有「第一次、還沒有任何資料」時才顯示骨架；重新整理時保留舊資料並淡化
+  const initialLoading = loading && !data;
 
   // 抓取儀表板與試算表資料（100% 來自 Google Sheets）
   const loadData = useCallback(async () => {
@@ -34,11 +41,17 @@ export default function TrainingMobileApp() {
       setLoading(true);
       setErrorMsg(null);
       const res = await fetch("/api/data");
+      // 頁面開著跨過午夜後 token 失效，直接回登入頁
+      if (res.status === 401) {
+        window.location.replace("/login");
+        return;
+      }
       const json = await res.json();
       if (!res.ok) {
         throw new Error(json.message || json.error || "無法讀取 Google 試算表");
       }
       setData(json);
+      setLastSyncedAt(new Date());
     } catch (e: any) {
       console.error("載入訓練資料失敗:", e);
       setErrorMsg(e.message || "讀取試算表失敗");
@@ -68,6 +81,22 @@ export default function TrainingMobileApp() {
   const currentLatestVolume = hasPrimaryHistory
     ? currentPrimaryLogs[currentPrimaryLogs.length - 1].volume || 0
     : 0;
+
+  // 總覽統計：以本地日期的「日」為單位計算，避免時區造成差一天
+  const DAY_MS = 86_400_000;
+  const toDay = (s?: string) => {
+    const m = s?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : null;
+  };
+  const now = new Date();
+  const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const logDays = (data?.logs || []).map((l) => toDay(l.date)).filter((t): t is number => t !== null);
+  const last7DaysCount = logDays.filter((t) => todayTs - t >= 0 && todayTs - t < 7 * DAY_MS).length;
+  const daysSinceLast = logDays.length > 0 ? Math.round((todayTs - Math.max(...logDays)) / DAY_MS) : null;
+  const planStartTs = toDay(data?.planMeta.createdAt);
+  const cycleWeek = planStartTs !== null && todayTs >= planStartTs
+    ? Math.floor((todayTs - planStartTs) / (7 * DAY_MS)) + 1
+    : null;
 
   // Primary Lift 動態 SVG 柱狀圖計算
   const renderPrimaryLiftChart = () => {
@@ -154,47 +183,58 @@ export default function TrainingMobileApp() {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div>
-          <h1>{data?.planMeta.title || "PPL Training"}</h1>
+          <h1>{initialLoading ? <Skeleton w="9em" h="1em" /> : data?.planMeta.title || "PPL Training"}</h1>
           <div className="sub">
-            {data?.planMeta.weeks ? `${data.planMeta.weeks} 週週期` : "週期訓練"} ·{" "}
-            {data?.planMeta.createdAt ? `${data.planMeta.createdAt} 建立` : ""} · Google Sheets 雲端連動
+            {initialLoading ? (
+              <Skeleton w="12em" h="0.85em" />
+            ) : (
+              <>
+                {data?.planMeta.weeks ? `${data.planMeta.weeks} 週週期` : "週期訓練"}
+                {data?.planMeta.createdAt ? ` · ${data.planMeta.createdAt} 建立` : ""}
+              </>
+            )}
           </div>
         </div>
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="p-2 rounded-xl bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--accent)] active:scale-95 transition-all"
-          title="重新載入雲端試算表資料"
-          aria-label="重新載入"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-[var(--accent)]" : ""}`} />
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setConfigOpen(true)}
+            className="p-2 rounded-xl bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--accent)] active:scale-95 transition-all"
+            title="組態：資料來源與服務狀態"
+            aria-label="組態"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="p-2 rounded-xl bg-[var(--card)] border border-[var(--line)] text-[var(--muted)] hover:text-[var(--accent)] active:scale-95 transition-all"
+            title="重新載入雲端試算表資料"
+            aria-label="重新載入"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-[var(--accent)]" : ""}`} />
+          </button>
+        </div>
       </header>
 
-      {/* 雲端狀態橫幅 */}
-      <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-[11px] flex items-center justify-between">
-        {errorMsg ? (
-          <div className="flex items-center gap-1.5 text-[var(--orange)] font-medium">
-            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>連線異常：{errorMsg}</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 text-[var(--accent)] font-medium">
-            <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>已連線 Google 試算表：{data?.spreadsheetTitle || "Workout Tracker"}</span>
-          </div>
-        )}
-      </div>
+      {/* 雲端狀態橫幅：連線正常時不佔版面，只在異常時提示 */}
+      {errorMsg && (
+        <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-[11px] flex items-center gap-1.5 text-[var(--orange)] font-medium">
+          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>連線異常：{errorMsg}</span>
+        </div>
+      )}
 
-      <main>
+      <main className={loading && data ? "is-refreshing" : ""} aria-busy={loading}>
         {/* ==================== 1. 總覽 (Home) ==================== */}
         {activeTab === "home" && (
           <section className="fade-in">
             <div className="card hero">
               <div className="kicker">Next Workout</div>
-              <div className="title">{currentWorkoutId}</div>
+              <div className="title">{initialLoading ? <Skeleton w="5em" h="0.95em" /> : currentWorkoutId}</div>
               <div className="next">
-                {data?.status.lastWorkout.workout === "尚未開始" || data?.status.lastWorkout.workout === "無紀錄" ? (
+                {initialLoading ? (
+                  <Skeleton w="15em" />
+                ) : data?.status.lastWorkout.workout === "尚未開始" || data?.status.lastWorkout.workout === "無紀錄" ? (
                   <span>目前尚未有訓練紀錄 → 準備執行第一課 <b>{currentWorkoutId}</b></span>
                 ) : (
                   <span>
@@ -211,6 +251,13 @@ export default function TrainingMobileApp() {
                 <span className="badge">Rolling PPL</span>
               </div>
               <div className="timeline">
+                {initialLoading &&
+                  Array.from({ length: 6 }, (_, i) => (
+                    <div key={i} className="step">
+                      <Skeleton w="2.5em" h="0.7em" />
+                      <Skeleton block w="4em" h="1em" className="mx-auto mt-1.5" />
+                    </div>
+                  ))}
                 {(data?.status.cycle || []).map((item, idx) => {
                   const currentIdx = data?.status.currentIndex ?? 0;
                   const isDone = (data?.logs.length || 0) > 0 && idx === (currentIdx - 1 + (data?.status.cycle.length || 6)) % (data?.status.cycle.length || 6);
@@ -230,26 +277,42 @@ export default function TrainingMobileApp() {
             </div>
 
             <div className="grid-stats">
-              <div className="stat">
-                <span>週期計畫</span>
-                <b>{data?.planMeta.weeks ? `${data.planMeta.weeks} 週` : "-"}</b>
-              </div>
-              <div className="stat">
-                <span>課表分類</span>
-                <b>{Object.keys(data?.plans || {}).length} 課</b>
-              </div>
-              <div className="stat">
-                <span>試算表動作</span>
-                <b>
-                  {Object.values(data?.plans || {}).reduce((acc, p) => acc + p.exercises.length, 0)} 個
-                </b>
-              </div>
-              <div className="stat">
-                <span>訓練日誌</span>
-                <b>{data?.logs.length || 0} 筆</b>
-              </div>
+              {[
+                {
+                  label: "週期進度",
+                  value: (
+                    <>
+                      {cycleWeek !== null ? `第 ${cycleWeek} 週` : "-"}
+                      {data?.planMeta.weeks && <small className="text-[11px] text-[var(--muted)] font-normal"> / {data.planMeta.weeks}</small>}
+                    </>
+                  ),
+                },
+                { label: "近 7 天訓練", value: `${last7DaysCount} 次` },
+                { label: "距上次訓練", value: daysSinceLast === null ? "-" : daysSinceLast === 0 ? "今天" : `${daysSinceLast} 天` },
+                { label: "累計訓練", value: `${data?.logs.length || 0} 次` },
+              ].map((s) => (
+                <div key={s.label} className="stat">
+                  <span>{s.label}</span>
+                  <b>{initialLoading ? <Skeleton w="3.5em" h="1em" /> : s.value}</b>
+                </div>
+              ))}
             </div>
 
+            {initialLoading ? (
+              <section className="card">
+                <Skeleton block w="8em" h="0.7em" />
+                <Skeleton block w="12em" h="1em" className="mt-2" />
+                <div className="lift-summary mt-3">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="metric">
+                      <Skeleton block w="5em" h="1.1em" />
+                      <Skeleton block w="7em" h="0.7em" className="mt-2" />
+                    </div>
+                  ))}
+                </div>
+                <Skeleton block w="100%" h="140px" className="mt-3 !rounded-xl" />
+              </section>
+            ) : (
             <section className="card">
               <div className="section-title">
                 <div>
@@ -280,6 +343,7 @@ export default function TrainingMobileApp() {
                 )}
               </div>
             </section>
+            )}
           </section>
         )}
 
@@ -288,17 +352,30 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card hero">
               <div className="kicker">Next Workout</div>
-              <div className="title">{currentWorkoutPlan?.name || "課表"}</div>
-              <div className="next">{currentWorkoutPlan?.description || "下一次訓練直接執行這張課表"}</div>
+              <div className="title">{initialLoading ? <Skeleton w="5em" h="0.95em" /> : currentWorkoutPlan?.name || "課表"}</div>
+              <div className="next">
+                {initialLoading ? <Skeleton w="12em" /> : currentWorkoutPlan?.description || "下一次訓練直接執行這張課表"}
+              </div>
             </div>
 
             <div className="card">
               <div className="section-title">
-                <h2>{currentWorkoutPlan?.name} 動作清單</h2>
+                <h2>{initialLoading ? <Skeleton w="7em" h="1em" /> : `${currentWorkoutPlan?.name ?? ""} 動作清單`}</h2>
                 <span className="badge">
-                  {currentWorkoutPlan?.exercises.length || 0} 個動作
+                  {initialLoading ? <Skeleton w="3em" h="0.8em" /> : `${currentWorkoutPlan?.exercises.length || 0} 個動作`}
                 </span>
               </div>
+
+              {initialLoading &&
+                Array.from({ length: 4 }, (_, i) => (
+                  <div key={i} className="exercise">
+                    <div className="exercise-top">
+                      <Skeleton w="6em" h="1em" />
+                      <Skeleton w="4.5em" h="0.9em" />
+                    </div>
+                    <Skeleton block w="9em" h="0.75em" className="mt-2" />
+                  </div>
+                ))}
 
               {(currentWorkoutPlan?.exercises || []).map((ex, i) => (
                 <div key={i} className="exercise">
@@ -324,11 +401,21 @@ export default function TrainingMobileApp() {
                 <span className="muted">依試算表設定滾動</span>
               </div>
               {(() => {
+                if (initialLoading) {
+                  return Array.from({ length: 5 }, (_, i) => (
+                    <div key={i} className="row">
+                      <Skeleton w="4em" h="0.85em" />
+                      <span>
+                        <Skeleton w="3.5em" h="0.85em" />
+                      </span>
+                    </div>
+                  ));
+                }
                 const cycle = data?.status.cycle || [];
                 const curr = data?.status.currentIndex ?? 0;
                 if (cycle.length <= 1) return <p className="tip">目前試算表中只有一張課表。</p>;
-                return cycle
-                  .filter((_, idx) => idx !== curr)
+                // 從目前這課的下一課開始輪，才符合滾動循環的實際順序
+                return Array.from({ length: cycle.length - 1 }, (_, i) => cycle[(curr + 1 + i) % cycle.length])
                   .map((name, idx) => (
                     <div key={idx} className="row">
                       <span>{idx === 0 ? "下一課" : "之後課表"}</span>
@@ -343,24 +430,6 @@ export default function TrainingMobileApp() {
         {/* ==================== 3. 課表 (Plan) - 支援點擊查看詳細內容 ==================== */}
         {activeTab === "plan" && (
           <section className="fade-in">
-            <div className="card">
-              <div className="section-title">
-                <h2>{data?.planMeta.title || "訓練計畫"}</h2>
-                <span className="badge">試算表來源</span>
-              </div>
-              <div className="row">
-                <span>建立日期</span>
-                <b className="num">{data?.planMeta.createdAt || "-"}</b>
-              </div>
-              <div className="row">
-                <span>計畫週期</span>
-                <span>{data?.planMeta.weeks || "-"} 週滾動式循環</span>
-              </div>
-              <div className="row">
-                <span>計畫代碼</span>
-                <span className="num">{data?.planMeta.id || "-"}</span>
-              </div>
-            </div>
 
             <div className="card">
               <div className="section-title">
@@ -368,6 +437,16 @@ export default function TrainingMobileApp() {
                 <span className="text-[11px] text-[var(--accent)]">點擊卡片查看詳細內容</span>
               </div>
 
+              {initialLoading &&
+                Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} className="flex items-center gap-3 py-3 border-b border-[var(--line)] last:border-b-0">
+                    <Skeleton w="1.2em" h="0.8em" />
+                    <div className="flex-1">
+                      <Skeleton block w="10em" h="1em" />
+                      <Skeleton block w="7em" h="0.7em" className="mt-1.5" />
+                    </div>
+                  </div>
+                ))}
               {Object.values(data?.plans || {}).map((p, idx) => (
                 <div
                   key={p.id}
@@ -408,7 +487,21 @@ export default function TrainingMobileApp() {
                 <span className="text-[11px] text-[var(--accent)]">點擊紀錄可看完整細節</span>
               </div>
 
-              {(!data?.logs || data.logs.length === 0) ? (
+              {initialLoading ? (
+                // 載入中顯示卡片骨架，避免先閃出「尚無紀錄」的空狀態
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }, (_, i) => (
+                    <div key={i} className="p-3 rounded-xl bg-[var(--sunken)] border border-[var(--line)]">
+                      <Skeleton w="8em" h="0.7em" />
+                      <div className="mt-2 flex items-center justify-between">
+                        <Skeleton w="6em" h="1em" />
+                        <Skeleton w="3em" h="1em" />
+                      </div>
+                      <Skeleton block w="11em" h="0.7em" className="mt-2" />
+                    </div>
+                  ))}
+                </div>
+              ) : (!data?.logs || data.logs.length === 0) ? (
                 <div className="py-8 text-center">
                   <p className="text-sm text-[var(--muted)]">目前 Google 試算表「訓練日誌」中尚無紀錄。</p>
                   <p className="text-xs text-[var(--accent)] mt-2">
@@ -416,47 +509,36 @@ export default function TrainingMobileApp() {
                   </p>
                 </div>
               ) : (
-                <div className="scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>日期</th>
-                        <th>課表</th>
-                        <th>主項動作</th>
-                        <th>工作組明細</th>
-                        <th>最高重量</th>
-                        <th>充血 / 感受</th>
-                        <th>操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.logs.map((row, idx) => (
-                        <tr
-                          key={idx}
-                          onClick={() => setSelectedLog(row)}
-                          className="cursor-pointer hover:bg-[var(--sunken)]/60 transition-colors"
-                        >
-                          <td>{row.date}</td>
-                          <td>
-                            <span className="font-bold text-[var(--accent)]">{row.workout}</span>
-                          </td>
-                          <td className="font-semibold text-[var(--text)]">{row.mainExercise}</td>
-                          <td>{row.mainSetsDetail}</td>
-                          <td className="text-[var(--blue)] font-bold">{row.maxWeight ? `${row.maxWeight} kg` : "-"}</td>
-                          <td>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--sunken)] text-[var(--orange)] border border-[var(--line)]">
-                              {row.pumpLevel || "良好"}
+                // 手機上改用卡片列表取代寬表格；最新一筆排最上面
+                <div className="space-y-2">
+                  {[...data.logs].reverse().map((row, idx) => (
+                    <button
+                      type="button"
+                      key={`${row.date}-${row.workout}-${idx}`}
+                      onClick={() => setSelectedLog(row)}
+                      className="w-full text-left p-3 rounded-xl bg-[var(--sunken)] border border-[var(--line)] hover:border-[var(--accent-line)] active:scale-[0.99] transition-all flex items-center gap-3"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="num text-[var(--muted)]">{row.date}</span>
+                          <span className="font-bold text-[var(--accent)]">{row.workout}</span>
+                          {row.pumpLevel && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--card)] text-[var(--orange)] border border-[var(--line)]">
+                              {row.pumpLevel}
                             </span>
-                          </td>
-                          <td>
-                            <span className="text-[11px] text-[var(--accent)] flex items-center gap-0.5 font-medium">
-                              詳情 <ChevronRight className="w-3 h-3" />
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-baseline justify-between gap-2">
+                          <b className="text-sm text-[var(--text)] truncate">{row.mainExercise}</b>
+                          <span className="num text-sm font-bold text-[var(--blue)] whitespace-nowrap">
+                            {row.maxWeight ? `${row.maxWeight} kg` : "-"}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-[var(--muted)] break-words">{row.mainSetsDetail}</div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[var(--muted)] flex-shrink-0" />
+                    </button>
+                  ))}
                 </div>
               )}
               <p className="tip">訓練日誌 100% 與 Google 試算表「訓練日誌」同步。點擊任一筆日誌可查看 AI 評估、下次建議與身體反饋！</p>
@@ -475,6 +557,18 @@ export default function TrainingMobileApp() {
               <p className="text-xs text-[var(--muted)] mb-3">
                 每一課表均設有專屬複合主項動作，訓練進度將隨滾動自動切換追蹤：
               </p>
+              {initialLoading &&
+                Array.from({ length: 6 }, (_, i) => (
+                  <div key={i} className="row row-split">
+                    <div>
+                      <Skeleton block w="10em" h="0.95em" />
+                      <Skeleton block w="13em" h="0.7em" className="mt-1.5" />
+                    </div>
+                    <div>
+                      <Skeleton w="3.5em" h="0.95em" />
+                    </div>
+                  </div>
+                ))}
               {Object.values(data?.plans || {}).map((p) => {
                 const logsForP = (data?.logs || []).filter(
                   (l) => (p.primaryExercise?.name && l.mainExercise === p.primaryExercise.name) || l.workout === p.name
@@ -483,7 +577,7 @@ export default function TrainingMobileApp() {
                 const vol = logsForP.length > 0 ? logsForP[logsForP.length - 1].volume || 0 : 0;
 
                 return (
-                  <div key={p.id} className="row">
+                  <div key={p.id} className="row row-split">
                     <div>
                       <b>{p.name} · {p.primaryExercise?.name || "主項"}</b>
                       <span className="block text-[11px] text-[var(--muted)]">
@@ -526,6 +620,9 @@ export default function TrainingMobileApp() {
 
       {/* 課表詳細內容彈跳視窗 */}
       <PlanDetailModal plan={selectedPlan} onClose={() => setSelectedPlan(null)} />
+
+      {/* 組態面板：資料來源、服務狀態、欄位對照 */}
+      <ConfigPanel open={configOpen} onClose={closeConfig} data={data} lastSyncedAt={lastSyncedAt} />
 
       {/* 訓練日誌詳細內容彈跳視窗 */}
       <LogDetailModal log={selectedLog} onClose={() => setSelectedLog(null)} />

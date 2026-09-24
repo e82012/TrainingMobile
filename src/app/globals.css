@@ -205,6 +205,15 @@ h3 {
   font-weight: 700;
 }
 
+/* 左側為主要內容、右側為數值：右欄依內容寬度固定，避免被左側長文字擠扁 */
+.row.row-split {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.row.row-split > :first-child {
+  color: var(--text);
+}
+
 .row .num {
   font-variant-numeric: tabular-nums;
 }
@@ -455,6 +464,72 @@ th {
 
 td {
   font-variant-numeric: tabular-nums;
+}
+
+/* 骨架屏：初次載入時佔住資料欄位的位置，避免先閃出預設字再跳成真實資料 */
+.sk {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--card2) 0%, var(--line) 50%, var(--card2) 100%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.3s ease-in-out infinite;
+}
+
+.sk.block {
+  display: block;
+}
+
+@keyframes sk-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* 分頁切換與資料到位時的淡入 */
+.fade-in {
+  animation: fade-in 0.28s ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 重新整理時保留舊資料但降低存在感，讓使用者知道正在更新 */
+main {
+  transition: opacity 0.2s ease;
+}
+
+main.is-refreshing {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk,
+  .fade-in {
+    animation: none;
+  }
+}
+
+/* 可橫向滑動但不顯示捲軸（範例按鈕列等） */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Tab bar */
