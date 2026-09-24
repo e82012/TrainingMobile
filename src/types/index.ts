@@ -4,10 +4,10 @@ export interface TrainingLog {
   planId?: string; // 課表計畫id
   workout: string; // Push A, Pull A, etc.
   mainExercise: string; // 主項動作
-  mainSetsDetail: string; // 主項工作組明細，例如 50x8 / 55x8 / 55x8 / 50x8
+  mainSetsDetail: string; // 主項工作組明細
   maxWeight: number; // 最高重量(kg)
   accessoryExercises: string; // 輔助動作
-  pumpLevel?: string; // 充血度 (高/佳/良好)
+  pumpLevel?: string; // 充血度
   muscleFeeling?: string; // 目標肌群感受
   fatigueLevel?: string; // 疲勞度
   aiSummary?: string; // AI評估摘要
@@ -26,7 +26,7 @@ export interface WorkoutExercise {
 export interface WorkoutPlan {
   id: string; // Push A
   name: string; // Push A
-  category?: string; // 訓練部位，例如 胸、側三角、三頭
+  category?: string; // 訓練部位
   description: string;
   exercises: WorkoutExercise[];
 }
@@ -40,18 +40,24 @@ export interface CycleStatus {
     workout: string;
     subtitle: string;
   };
-  cycle: string[]; // ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"]
+  cycle: string[];
   currentIndex: number;
 }
 
 export interface PrimaryLiftSession {
   date: string;
-  sets: [number, number][]; // [重量 kg, 次數 reps][]
+  sets: [number, number][];
   volume?: number;
   maxWeight?: number;
 }
 
 export interface DashboardData {
+  planMeta: {
+    title: string;
+    weeks: string;
+    createdAt: string;
+    id: string;
+  };
   status: CycleStatus;
   primaryLift: {
     name: string;
@@ -60,7 +66,6 @@ export interface DashboardData {
   };
   plans: Record<string, WorkoutPlan>;
   logs: TrainingLog[];
-  isDemoMode?: boolean;
   spreadsheetTitle?: string;
 }
 

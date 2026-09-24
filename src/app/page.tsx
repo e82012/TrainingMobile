@@ -10,7 +10,7 @@ import {
   RefreshCw,
   Sparkles,
   CheckCircle2,
-  Info,
+  AlertCircle,
 } from "lucide-react";
 import { DashboardData } from "@/types";
 import GeminiAssistantModal from "@/components/GeminiAssistantModal";
@@ -19,18 +19,22 @@ export default function TrainingMobileApp() {
   const [activeTab, setActiveTab] = useState<"home" | "workout" | "plan" | "logs" | "progress">("home");
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // 抓取儀表板與試算表資料
+  // 抓取儀表板與試算表資料（100% 來自 Google Sheets）
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setErrorMsg(null);
       const res = await fetch("/api/data");
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.message || json.error || "無法讀取 Google 試算表");
       }
-    } catch (e) {
+      setData(json);
+    } catch (e: any) {
       console.error("載入訓練資料失敗:", e);
+      setErrorMsg(e.message || "讀取試算表失敗");
     } finally {
       setLoading(false);
     }
@@ -46,7 +50,7 @@ export default function TrainingMobileApp() {
     if (sessions.length === 0) {
       return (
         <div className="tip text-center py-4">
-          <p className="text-[var(--muted)]">尚無主項紀錄。</p>
+          <p className="text-[var(--muted)]">試算表中尚無主項紀錄。</p>
           <p className="text-[11px] text-[var(--accent)] mt-1">點擊右下角「Gemini 記日誌」輸入今日訓練即可生成圖表！</p>
         </div>
       );
@@ -119,8 +123,8 @@ export default function TrainingMobileApp() {
     );
   };
 
-  const nextWorkoutId = data?.status.nextWorkout.workout || "Push A";
-  const nextWorkoutPlan = data?.plans[nextWorkoutId] || data?.plans["Push A"];
+  const nextWorkoutId = data?.status.nextWorkout.workout || Object.keys(data?.plans || {})[0] || "課表";
+  const nextWorkoutPlan = data?.plans[nextWorkoutId] || Object.values(data?.plans || {})[0];
 
   const hasSessions = (data?.primaryLift.sessions.length || 0) > 0;
   const maxWeight = hasSessions
@@ -136,8 +140,11 @@ export default function TrainingMobileApp() {
       {/* Header */}
       <header className="flex items-center justify-between">
         <div>
-          <h1>PPL Training</h1>
-          <div className="sub">8 週滾動式 PPL · Google Sheets 雲端連動</div>
+          <h1>{data?.planMeta.title || "PPL Training"}</h1>
+          <div className="sub">
+            {data?.planMeta.weeks ? `${data.planMeta.weeks} 週週期` : "週期訓練"} ·{" "}
+            {data?.planMeta.createdAt ? `${data.planMeta.createdAt} 建立` : ""} · Google Sheets 雲端連動
+          </div>
         </div>
         <button
           onClick={loadData}
@@ -150,17 +157,17 @@ export default function TrainingMobileApp() {
         </button>
       </header>
 
-      {/* 雲端連線狀態橫幅 */}
-      <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-[11px] text-[var(--muted)] flex items-center justify-between">
-        {data?.isDemoMode ? (
-          <div className="flex items-center gap-1.5">
-            <Info className="w-3.5 h-3.5 text-[var(--orange)] flex-shrink-0" />
-            <span>展示模式（配置 Google Service Account 即可連線雲端試算表）</span>
+      {/* 雲端狀態橫幅 */}
+      <div className="mx-4 mt-3 px-3 py-2 rounded-xl bg-[var(--sunken)] border border-[var(--line)] text-[11px] flex items-center justify-between">
+        {errorMsg ? (
+          <div className="flex items-center gap-1.5 text-[var(--orange)] font-medium">
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>連線異常：{errorMsg}</span>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 text-[var(--accent)] font-medium">
             <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
-            <span>已成功連線 Google 試算表：{data?.spreadsheetTitle || "Workout Tracker"}</span>
+            <span>100% 同步 Google 試算表：{data?.spreadsheetTitle || "Workout Tracker"}</span>
           </div>
         )}
       </div>
@@ -171,14 +178,14 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card hero">
               <div className="kicker">Next Workout</div>
-              <div className="title">{data?.status.nextWorkout.workout || "Push A"}</div>
+              <div className="title">{nextWorkoutId}</div>
               <div className="next">
-                {data?.status.lastWorkout.workout === "尚未開始" ? (
-                  <span>目前尚未有訓練紀錄 → 準備開始第一課 <b>{data?.status.nextWorkout.workout}</b></span>
+                {data?.status.lastWorkout.workout === "尚未開始" || data?.status.lastWorkout.workout === "無紀錄" ? (
+                  <span>目前尚未有訓練紀錄 → 準備執行第一課 <b>{nextWorkoutId}</b></span>
                 ) : (
                   <span>
                     上一次：<b>{data?.status.lastWorkout.date} {data?.status.lastWorkout.workout}</b> → 下一次直接進入{" "}
-                    <b>{data?.status.nextWorkout.workout}</b>
+                    <b>{nextWorkoutId}</b>
                   </span>
                 )}
               </div>
@@ -190,37 +197,35 @@ export default function TrainingMobileApp() {
                 <span className="badge">Rolling PPL</span>
               </div>
               <div className="timeline">
-                {(data?.status.cycle || ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"]).map(
-                  (item, idx) => {
-                    const currentIdx = data?.status.currentIndex ?? 0;
-                    const isDone = data?.logs.length ? idx === (currentIdx - 1 + 6) % 6 : false;
-                    const isCurrent = idx === currentIdx;
-                    return (
-                      <div
-                        key={item}
-                        className={`step ${isDone ? "done" : ""} ${isCurrent ? "current" : ""}`}
-                      >
-                        <div className="n">{isCurrent ? "NEXT" : isDone ? "完成" : "之後"}</div>
-                        <strong>{item}</strong>
-                      </div>
-                    );
-                  }
-                )}
+                {(data?.status.cycle || []).map((item, idx) => {
+                  const currentIdx = data?.status.currentIndex ?? 0;
+                  const isDone = (data?.logs.length || 0) > 0 && idx === (currentIdx - 1 + (data?.status.cycle.length || 6)) % (data?.status.cycle.length || 6);
+                  const isCurrent = idx === currentIdx;
+                  return (
+                    <div
+                      key={item}
+                      className={`step ${isDone ? "done" : ""} ${isCurrent ? "current" : ""}`}
+                    >
+                      <div className="n">{isCurrent ? "NEXT" : isDone ? "完成" : "之後"}</div>
+                      <strong>{item}</strong>
+                    </div>
+                  );
+                })}
               </div>
               <p className="tip">不依星期重置；完成哪一課，就從下一課繼續。少練一天也不補課。</p>
             </div>
 
             <div className="grid-stats">
               <div className="stat">
-                <span>計畫</span>
-                <b>V1.0</b>
+                <span>週期計畫</span>
+                <b>{data?.planMeta.weeks ? `${data.planMeta.weeks} 週` : "-"}</b>
               </div>
               <div className="stat">
-                <span>週期</span>
-                <b>8 週</b>
+                <span>課表分類</span>
+                <b>{Object.keys(data?.plans || {}).length} 課</b>
               </div>
               <div className="stat">
-                <span>課表動作</span>
+                <span>試算表動作</span>
                 <b>
                   {Object.values(data?.plans || {}).reduce((acc, p) => acc + p.exercises.length, 0)} 個
                 </b>
@@ -235,9 +240,9 @@ export default function TrainingMobileApp() {
               <div className="section-title">
                 <div>
                   <div className="eyebrow">Primary Lift</div>
-                  <h2>{data?.primaryLift.name || "上斜槓鈴臥推"}</h2>
+                  <h2>{data?.primaryLift.name || "主項訓練"}</h2>
                 </div>
-                <span className="badge">{data?.primaryLift.target || "4 × 6–8"}</span>
+                <span className="badge">{data?.primaryLift.target || "目標組數"}</span>
               </div>
 
               <div className="lift-summary">
@@ -265,20 +270,15 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card hero">
               <div className="kicker">Next Workout</div>
-              <div className="title">{nextWorkoutPlan?.name || "Push A"}</div>
+              <div className="title">{nextWorkoutPlan?.name || "課表"}</div>
               <div className="next">{nextWorkoutPlan?.description || "下一次訓練直接執行這張課表"}</div>
             </div>
 
             <div className="card">
               <div className="section-title">
-                <h2>{nextWorkoutPlan?.name} 課表</h2>
+                <h2>{nextWorkoutPlan?.name} 動作清單</h2>
                 <span className="badge">
-                  {nextWorkoutPlan?.exercises.length || 0} 動作 ·{" "}
-                  {nextWorkoutPlan?.exercises.reduce(
-                    (sum, e) => sum + (parseInt(e.sets.split("×")[0]) || 3),
-                    0
-                  )}{" "}
-                  組
+                  {nextWorkoutPlan?.exercises.length || 0} 個動作
                 </span>
               </div>
 
@@ -303,18 +303,20 @@ export default function TrainingMobileApp() {
             <div className="card">
               <div className="section-title">
                 <h2>之後的課表</h2>
-                <span className="muted">固定滾動</span>
+                <span className="muted">依試算表設定滾動</span>
               </div>
               {(() => {
-                const cycle = data?.status.cycle || ["Push A", "Pull A", "Legs A", "Push B", "Pull B", "Legs B"];
+                const cycle = data?.status.cycle || [];
                 const curr = data?.status.currentIndex ?? 0;
-                const nexts = [1, 2, 3, 4].map((offset) => cycle[(curr + offset) % cycle.length]);
-                return nexts.map((name, idx) => (
-                  <div key={idx} className="row">
-                    <span>{idx === 0 ? "下一課" : "再下一課"}</span>
-                    <b>{name}</b>
-                  </div>
-                ));
+                if (cycle.length <= 1) return <p className="tip">目前試算表中只有一張課表。</p>;
+                return cycle
+                  .filter((_, idx) => idx !== curr)
+                  .map((name, idx) => (
+                    <div key={idx} className="row">
+                      <span>{idx === 0 ? "下一課" : "之後課表"}</span>
+                      <b>{name}</b>
+                    </div>
+                  ));
               })()}
             </div>
           </section>
@@ -325,50 +327,36 @@ export default function TrainingMobileApp() {
           <section className="fade-in">
             <div className="card">
               <div className="section-title">
-                <h2>8 週滾動式 PPL 課表</h2>
-                <span className="badge">Google Sheets</span>
+                <h2>{data?.planMeta.title || "訓練計畫"}</h2>
+                <span className="badge">試算表來源</span>
               </div>
               <div className="row">
                 <span>建立日期</span>
-                <b className="num">2026-09-22</b>
+                <b className="num">{data?.planMeta.createdAt || "-"}</b>
               </div>
               <div className="row">
-                <span>目標</span>
-                <span>肌肥大／力量維持與提升／漸進超負荷</span>
+                <span>計畫週期</span>
+                <span>{data?.planMeta.weeks || "-"} 週滾動式循環</span>
+              </div>
+              <div className="row">
+                <span>計畫代碼</span>
+                <span className="num">{data?.planMeta.id || "-"}</span>
               </div>
             </div>
 
             <div className="card">
-              <h2>六課循環計畫</h2>
+              <h2>完整循環課表（自 Google 試算表即時載入）</h2>
               {Object.values(data?.plans || {}).map((p, idx) => (
                 <div key={p.id} className="row">
                   <span className="num">0{idx + 1}</span>
                   <div>
                     <b>{p.name}</b>
-                    <span className="block text-[11px] text-[var(--muted)]">{p.category}</span>
+                    <span className="block text-[11px] text-[var(--muted)]">
+                      {p.category} · {p.exercises.length} 動作
+                    </span>
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div className="card">
-              <h2>週期階段</h2>
-              <div className="row">
-                <span>Week 1–2</span>
-                <span>適應／基準建立（掌握負重節奏）</span>
-              </div>
-              <div className="row">
-                <span>Week 3–4</span>
-                <span>漸進超負荷（每週微增次數或重量）</span>
-              </div>
-              <div className="row">
-                <span>Week 5–7</span>
-                <span>主要增肌期（穩定高強度訓練）</span>
-              </div>
-              <div className="row">
-                <span>Week 8</span>
-                <span>Deload（減量恢復週，降 40% 組數）</span>
-              </div>
             </div>
           </section>
         )}
@@ -425,7 +413,7 @@ export default function TrainingMobileApp() {
                   </table>
                 </div>
               )}
-              <p className="tip">訓練日誌與 Google Sheets「訓練日誌」工作表 100% 同步。透過 Gemini 助理口語記錄後即時刷新！</p>
+              <p className="tip">訓練日誌 100% 與 Google 試算表「訓練日誌」同步。清空試算表此處即為 0 筆，透過 Gemini 助理口語記錄後即時刷新！</p>
             </div>
           </section>
         )}
@@ -439,25 +427,21 @@ export default function TrainingMobileApp() {
                 <span className="badge">Primary Lift</span>
               </div>
               <div className="row">
-                <span>{data?.primaryLift.name || "上斜槓鈴臥推"}</span>
-                <b>Push A</b>
+                <span>主項動作</span>
+                <b>{data?.primaryLift.name || "-"}</b>
               </div>
               <div className="row">
                 <span>最高重量紀錄</span>
-                <b className="num">{hasSessions ? `${maxWeight} kg` : "-"}</b>
+                <b className="num">{hasSessions ? `${maxWeight} kg` : "尚無紀錄"}</b>
               </div>
               <div className="row">
                 <span>最近總 Volume</span>
-                <b className="num">{hasSessions ? `${latestVolume.toLocaleString()} kg` : "-"}</b>
-              </div>
-              <div className="row">
-                <span>進階標準</span>
-                <span>4 組皆達 8 Reps 且動作穩定無借力 → 增加 2.5–5 kg</span>
+                <b className="num">{hasSessions ? `${latestVolume.toLocaleString()} kg` : "尚無紀錄"}</b>
               </div>
             </div>
 
             <div className="card">
-              <h2>8 週觀察重點</h2>
+              <h2>進階與週期觀察</h2>
               <div className="row">
                 <span>訓練表現</span>
                 <span>主項負重穩定度／動作離心控制／每週 Volume 微幅上升</span>

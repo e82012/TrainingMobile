@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     // 1. 呼叫 Gemini 解析對話與訓練內容
     const parsed = await parseWorkoutChat(message);
 
-    let sheetResult = { success: true, count: 0, demo: true };
+    let sheetResult = { success: true, count: 0 };
 
     // 2. 若為新增日誌，自動寫入 Google Sheets
     if (parsed.actionType === "ADD_LOG" && parsed.log) {
@@ -46,7 +46,6 @@ export async function POST(req: NextRequest) {
       workout: parsed.workout,
       date: parsed.date,
       sheetSuccess: true,
-      demo: sheetResult.demo,
     });
   } catch (error: any) {
     console.error("API /api/chat error:", error);
