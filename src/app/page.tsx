@@ -93,10 +93,21 @@ export default function TrainingMobileApp() {
   const logDays = (data?.logs || []).map((l) => toDay(l.date)).filter((t): t is number => t !== null);
   const last7DaysCount = logDays.filter((t) => todayTs - t >= 0 && todayTs - t < 7 * DAY_MS).length;
   const daysSinceLast = logDays.length > 0 ? Math.round((todayTs - Math.max(...logDays)) / DAY_MS) : null;
+  // 週期進度：練完一整輪循環才算一週，不跟日曆走——否則休息天一多，8 週的課表根本練不完就「到期」
   const planStartTs = toDay(data?.planMeta.createdAt);
-  const cycleWeek = planStartTs !== null && todayTs >= planStartTs
-    ? Math.floor((todayTs - planStartTs) / (7 * DAY_MS)) + 1
-    : null;
+  const cycleList = data?.status.cycle || [];
+  const cycleLen = cycleList.length;
+  // 只算本計畫的紀錄：planId 相符、日期不早於建立日、且是循環內的課表（舊計畫的日誌不混進來）
+  const planSessionCount = (data?.logs || []).filter((l) => {
+    if (l.planId !== data?.planMeta.id || !cycleList.includes(l.workout)) return false;
+    const t = toDay(l.date);
+    return planStartTs === null || t === null || t >= planStartTs;
+  }).length;
+  const totalWeeks = parseInt(data?.planMeta.weeks || "", 10) || null;
+  const completedCycles = cycleLen > 0 ? Math.floor(planSessionCount / cycleLen) : 0;
+  const cycleFinished = totalWeeks !== null && completedCycles >= totalWeeks;
+  const cycleWeek = cycleLen > 0 ? completedCycles + 1 : null;
+  const sessionInWeek = cycleLen > 0 ? planSessionCount % cycleLen : 0;
 
   // Primary Lift 動態 SVG 柱狀圖計算
   const renderPrimaryLiftChart = () => {
@@ -282,8 +293,11 @@ export default function TrainingMobileApp() {
                   label: "週期進度",
                   value: (
                     <>
-                      {cycleWeek !== null ? `第 ${cycleWeek} 週` : "-"}
+                      {cycleFinished ? "已完成" : cycleWeek !== null ? `第 ${cycleWeek} 週` : "-"}
                       {data?.planMeta.weeks && <small className="text-[11px] text-[var(--muted)] font-normal"> / {data.planMeta.weeks}</small>}
+                      {!cycleFinished && cycleWeek !== null && (
+                        <small className="block text-[11px] text-[var(--muted)] font-normal">本週 {sessionInWeek}/{cycleLen} 課</small>
+                      )}
                     </>
                   ),
                 },
