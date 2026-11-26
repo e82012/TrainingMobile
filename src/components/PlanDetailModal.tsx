@@ -63,7 +63,7 @@ export default function PlanDetailModal({ plan, onClose }: PlanDetailModalProps)
                   <span className="text-xs font-bold text-[var(--muted)]">#{idx + 1}</span>
                   <h4 className="font-bold text-sm text-[var(--text)]">{ex.name}</h4>
                   {ex.isPrimary && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-[var(--accent)] text-[var(--bg)]">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-[var(--accent-fill)] text-[var(--on-accent)]">
                       主項
                     </span>
                   )}

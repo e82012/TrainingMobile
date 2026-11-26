@@ -1,5 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Barlow_Condensed } from "next/font/google";
 import "./globals.css";
+
+// 只用在數字（重量、天數、課表名稱大字），中文仍走系統字型
+const barlow = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: ["500", "700"],
+  variable: "--font-barlow",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Training Mobile",
@@ -14,7 +23,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#0b0d10",
+  themeColor: "#0c1119",
 };
 
 export default function RootLayout({
@@ -23,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-Hant">
+    <html lang="zh-Hant" className={barlow.variable}>
       <head>
         <link rel="apple-touch-icon" href="/app-icon.jpg" />
       </head>

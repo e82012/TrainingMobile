@@ -19,6 +19,7 @@ import PlanDetailModal from "@/components/PlanDetailModal";
 import LogDetailModal from "@/components/LogDetailModal";
 import ConfigPanel from "@/components/ConfigPanel";
 import Skeleton from "@/components/Skeleton";
+import ProgressRings from "@/components/ProgressRings";
 
 export default function TrainingMobileApp() {
   const [activeTab, setActiveTab] = useState<"home" | "workout" | "plan" | "logs" | "progress">("home");
@@ -108,6 +109,12 @@ export default function TrainingMobileApp() {
   const cycleFinished = totalWeeks !== null && completedCycles >= totalWeeks;
   const cycleWeek = cycleLen > 0 ? completedCycles + 1 : null;
   const sessionInWeek = cycleLen > 0 ? planSessionCount % cycleLen : 0;
+  const currentIdx = data?.status.currentIndex ?? 0;
+  const hasPlanRecord = planSessionCount > 0;
+  const lastAnyLog = data?.logs.length ? data.logs[data.logs.length - 1] : null;
+  // 休息超過這個天數，首頁的「距上次訓練」改用提醒色
+  const REST_ALERT_DAYS = 4;
+  const restOverdue = daysSinceLast !== null && daysSinceLast > REST_ALERT_DAYS;
 
   // Primary Lift 動態 SVG 柱狀圖計算
   const renderPrimaryLiftChart = () => {
@@ -239,125 +246,124 @@ export default function TrainingMobileApp() {
         {/* ==================== 1. 總覽 (Home) ==================== */}
         {activeTab === "home" && (
           <section className="fade-in">
+            {/* 下一課：首頁最重要的一件事，加上距上次訓練幾天 */}
             <div className="card hero">
-              <div className="kicker">Next Workout</div>
-              <div className="title">{initialLoading ? <Skeleton w="5em" h="0.95em" /> : currentWorkoutId}</div>
-              <div className="next">
-                {initialLoading ? (
-                  <Skeleton w="15em" />
-                ) : data?.status.lastWorkout.workout === "尚未開始" || data?.status.lastWorkout.workout === "無紀錄" ? (
-                  <span>目前尚未有訓練紀錄 → 準備執行第一課 <b>{currentWorkoutId}</b></span>
-                ) : (
-                  <span>
-                    上一次：<b>{data?.status.lastWorkout.date} {data?.status.lastWorkout.workout}</b> → 下一次直接進入{" "}
-                    <b>{currentWorkoutId}</b>
-                  </span>
-                )}
+              <div className="kicker">Next Workout · 下一課</div>
+              <div className="title num-display">{initialLoading ? <Skeleton w="3.5em" h="0.9em" /> : currentWorkoutId}</div>
+              <div className="next">{initialLoading ? <Skeleton w="10em" /> : currentWorkoutPlan?.category || "下一次訓練直接執行這張課表"}</div>
+              <div className="hero-foot">
+                <div className="min-w-0 text-[13px] leading-relaxed">
+                  {initialLoading ? (
+                    <Skeleton w="11em" />
+                  ) : hasPlanRecord ? (
+                    <>
+                      <div>上次 {data?.status.lastWorkout.date} {data?.status.lastWorkout.workout}</div>
+                      <div className="text-[11px] text-[var(--muted)]">本週第 {currentIdx + 1} 課 / {cycleLen}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div>本計畫尚無紀錄</div>
+                      {lastAnyLog && (
+                        <div className="text-[11px] text-[var(--muted)]">
+                          上次訓練 {lastAnyLog.date.slice(5).replace("-", "/")} {lastAnyLog.workout}（舊計畫）
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="rest">
+                  {initialLoading ? (
+                    <Skeleton w="3em" h="1.6em" />
+                  ) : (
+                    <strong className={`num-display ${restOverdue ? "overdue" : ""}`}>
+                      {daysSinceLast === null ? "-" : daysSinceLast === 0 ? "今天" : daysSinceLast}
+                      {daysSinceLast !== null && daysSinceLast > 0 && <small> 天</small>}
+                    </strong>
+                  )}
+                  <span>距上次訓練</span>
+                </div>
               </div>
             </div>
 
+            {/* 循環位置 + 進度環：本輪練到哪一課、週期與本週進度 */}
             <div className="card">
               <div className="section-title">
-                <h2>目前循環位置</h2>
-                <span className="badge">Rolling PPL</span>
+                <div className="eyebrow">Cycle · 目前循環位置</div>
+                {cycleLen > 0 && <span className="text-[11px] text-[var(--muted)]">第 {currentIdx + 1} 課 / {cycleLen}</span>}
               </div>
-              <div className="timeline">
+              <div className="timeline" style={{ gridTemplateColumns: `repeat(${Math.max(cycleLen, 3)}, minmax(0, 1fr))` }}>
                 {initialLoading &&
-                  Array.from({ length: 6 }, (_, i) => (
+                  Array.from({ length: 3 }, (_, i) => (
                     <div key={i} className="step">
                       <Skeleton w="2.5em" h="0.7em" />
                       <Skeleton block w="4em" h="1em" className="mx-auto mt-1.5" />
                     </div>
                   ))}
-                {(data?.status.cycle || []).map((item, idx) => {
-                  const currentIdx = data?.status.currentIndex ?? 0;
-                  const isDone = planSessionCount > 0 && idx === (currentIdx - 1 + (data?.status.cycle.length || 6)) % (data?.status.cycle.length || 6);
+                {cycleList.map((item, idx) => {
+                  // 本輪中排在下一課之前的都算已完成；新的一輪（下一課回到第 1 課）則全部歸零
+                  const isDone = hasPlanRecord && idx < currentIdx;
                   const isCurrent = idx === currentIdx;
                   return (
-                    <div
-                      key={item}
-                      className={`step ${isDone ? "done" : ""} ${isCurrent ? "current" : ""}`}
-                    >
-                      <div className="n">{isCurrent ? "NEXT" : isDone ? "完成" : "之後"}</div>
+                    <div key={item} className={`step ${isDone ? "done" : ""} ${isCurrent ? "current" : ""}`}>
+                      <div className="n">{isCurrent ? "NEXT" : isDone ? "✓ 完成" : "之後"}</div>
                       <strong>{item}</strong>
                     </div>
                   );
                 })}
               </div>
-              <p className="tip">不依星期重置；完成哪一課，就從下一課繼續。少練一天也不補課。</p>
+              {!initialLoading && cycleLen > 0 && (
+                <ProgressRings
+                  rings={[
+                    {
+                      label: cycleFinished ? "週期已完成" : "週期",
+                      value: cycleFinished ? totalWeeks ?? 0 : cycleWeek ?? 0,
+                      unit: totalWeeks ? `/ ${totalWeeks} 週` : "週",
+                      ratio: totalWeeks ? completedCycles / totalWeeks : 0,
+                      color: "var(--accent)",
+                    },
+                    { label: "本週課數", value: sessionInWeek, unit: `/ ${cycleLen}`, ratio: sessionInWeek / cycleLen, color: "var(--blue)" },
+                    // 以「7 天練完一輪」當作滿圈的參考值
+                    { label: "近 7 天", value: last7DaysCount, unit: "次", ratio: last7DaysCount / cycleLen, color: "var(--orange)" },
+                  ]}
+                />
+              )}
             </div>
 
-            <div className="grid-stats">
-              {[
-                {
-                  label: "週期進度",
-                  value: (
-                    <>
-                      {cycleFinished ? "已完成" : cycleWeek !== null ? `第 ${cycleWeek} 週` : "-"}
-                      {data?.planMeta.weeks && <small className="text-[11px] text-[var(--muted)] font-normal"> / {data.planMeta.weeks}</small>}
-                      {!cycleFinished && cycleWeek !== null && (
-                        <small className="block text-[11px] text-[var(--muted)] font-normal">本週 {sessionInWeek}/{cycleLen} 課</small>
-                      )}
-                    </>
-                  ),
-                },
-                { label: "近 7 天訓練", value: `${last7DaysCount} 次` },
-                { label: "距上次訓練", value: daysSinceLast === null ? "-" : daysSinceLast === 0 ? "今天" : `${daysSinceLast} 天` },
-                { label: "累計訓練", value: `${data?.logs.length || 0} 次` },
-              ].map((s) => (
-                <div key={s.label} className="stat">
-                  <span>{s.label}</span>
-                  <b>{initialLoading ? <Skeleton w="3.5em" h="1em" /> : s.value}</b>
-                </div>
-              ))}
-            </div>
-
-            {initialLoading ? (
-              <section className="card">
-                <Skeleton block w="8em" h="0.7em" />
-                <Skeleton block w="12em" h="1em" className="mt-2" />
-                <div className="lift-summary mt-3">
-                  {[0, 1].map((i) => (
-                    <div key={i} className="metric">
-                      <Skeleton block w="5em" h="1.1em" />
-                      <Skeleton block w="7em" h="0.7em" className="mt-2" />
-                    </div>
-                  ))}
-                </div>
-                <Skeleton block w="100%" h="140px" className="mt-3 !rounded-xl" />
-              </section>
-            ) : (
+            {/* 當天主項：只放今天要看的數字，趨勢圖移到進度頁 */}
             <section className="card">
-              <div className="section-title">
-                <div>
-                  <div className="eyebrow">當天主項 · Primary Lift</div>
-                  <h2>{currentWorkoutId} · {currentPrimary?.name || "主項訓練"}</h2>
-                </div>
-                <span className="badge">{currentPrimary?.sets || "目標組數"}</span>
-              </div>
-
-              <div className="lift-summary">
-                <div className="metric">
-                  <strong>{hasPrimaryHistory ? `${currentLatestVolume.toLocaleString()} kg` : "-"}</strong>
-                  <span>{currentPrimary?.name || "主項"} 最近一次 Volume</span>
-                </div>
-                <div className="metric">
-                  <strong>{hasPrimaryHistory ? `${currentMaxWeight} kg` : "-"}</strong>
-                  <span>{currentPrimary?.name || "主項"} 歷史最高負重</span>
-                </div>
-              </div>
-
-              {renderPrimaryLiftChart()}
-
-              <div className="trend-note">
-                {currentPrimary?.notes ? (
-                  <span><b>下一階段目標</b>：{currentPrimary.notes}</span>
-                ) : (
-                  <span><b>總 Volume = Σ（重量 × Reps）</b>，動態追蹤當天課表之主項複合動作。</span>
-                )}
-              </div>
+              {initialLoading ? (
+                <>
+                  <Skeleton block w="8em" h="0.7em" />
+                  <Skeleton block w="10em" h="1em" className="mt-2" />
+                  <Skeleton block w="12em" h="1.6em" className="mt-3" />
+                </>
+              ) : (
+                <>
+                  <div className="eyebrow">主項 · Primary Lift</div>
+                  <h2 className="mt-1">{currentPrimary?.name || "主項訓練"}</h2>
+                  <div className="flex items-end gap-6 mt-2">
+                    <div>
+                      <div className="num-display text-[30px] leading-tight">
+                        {hasPrimaryHistory ? currentMaxWeight : "-"}
+                        {hasPrimaryHistory && <small className="unit"> kg</small>}
+                      </div>
+                      <div className="text-[11px] text-[var(--muted)]">歷史最高</div>
+                    </div>
+                    <div>
+                      {/* 目標是中英混排文字，用大字窄體會太粗重，改用一般字重的中字級 */}
+                      <div className="text-[18px] font-bold leading-tight pb-[3px]">{currentPrimary?.sets || "-"}</div>
+                      <div className="text-[11px] text-[var(--muted)]">今日目標</div>
+                    </div>
+                  </div>
+                  {/* 「主項動作」是課表 J 欄空白時的預設字，不是真的目標 */}
+                  {currentPrimary?.notes && currentPrimary.notes !== "主項動作" && (
+                    <div className="trend-note">
+                      <b>下一階段目標</b>：{currentPrimary.notes}
+                    </div>
+                  )}
+                </>
+              )}
             </section>
-            )}
           </section>
         )}
 
@@ -563,6 +569,42 @@ export default function TrainingMobileApp() {
         {/* ==================== 5. 進度 (Progress) ==================== */}
         {activeTab === "progress" && (
           <section className="fade-in">
+            {/* 從首頁移過來的當天主項趨勢與累計統計 */}
+            <section className="card">
+              <div className="section-title">
+                <div>
+                  <div className="eyebrow">當天主項 · Volume 趨勢</div>
+                  <h2>{currentWorkoutId} · {currentPrimary?.name || "主項訓練"}</h2>
+                </div>
+                <span className="badge">{currentPrimary?.sets || "目標組數"}</span>
+              </div>
+              <div className="lift-summary">
+                <div className="metric">
+                  <strong>{hasPrimaryHistory ? `${currentLatestVolume.toLocaleString()} kg` : "-"}</strong>
+                  <span>最近一次 Volume</span>
+                </div>
+                <div className="metric">
+                  <strong>{hasPrimaryHistory ? `${currentMaxWeight} kg` : "-"}</strong>
+                  <span>歷史最高負重</span>
+                </div>
+              </div>
+              {!initialLoading && renderPrimaryLiftChart()}
+              <div className="trend-note">
+                <span><b>總 Volume = Σ（重量 × Reps）</b>，追蹤當天課表的主項複合動作。</span>
+              </div>
+            </section>
+
+            <div className="grid-stats">
+              <div className="stat">
+                <span>本計畫訓練</span>
+                <b>{planSessionCount} 次</b>
+              </div>
+              <div className="stat">
+                <span>累計訓練（全部計畫）</span>
+                <b>{data?.logs.length || 0} 次</b>
+              </div>
+            </div>
+
             <div className="card">
               <div className="section-title">
                 <h2>各課表主項動作總覽</h2>

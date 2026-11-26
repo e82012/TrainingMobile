@@ -68,7 +68,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={!password || loading}
-          className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[var(--accent)] text-[var(--bg)] text-sm font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
+          className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[var(--accent-fill)] text-[var(--on-accent)] text-sm font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
         >
           <LogIn className="w-4 h-4" />
           {loading ? "驗證中…" : "進入"}
