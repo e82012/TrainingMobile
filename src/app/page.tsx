@@ -271,7 +271,7 @@ export default function TrainingMobileApp() {
                   ))}
                 {(data?.status.cycle || []).map((item, idx) => {
                   const currentIdx = data?.status.currentIndex ?? 0;
-                  const isDone = (data?.logs.length || 0) > 0 && idx === (currentIdx - 1 + (data?.status.cycle.length || 6)) % (data?.status.cycle.length || 6);
+                  const isDone = planSessionCount > 0 && idx === (currentIdx - 1 + (data?.status.cycle.length || 6)) % (data?.status.cycle.length || 6);
                   const isCurrent = idx === currentIdx;
                   return (
                     <div

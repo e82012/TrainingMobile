@@ -77,17 +77,48 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   let planTitle = "訓練課表";
   let planWeeks = "8";
   let planCreatedAt = "2026-09-22";
-  let planId = "260922";
+  let planId = "";
 
   if (planRes?.data.values && planRes.data.values.length > 0) {
     const P = PLAN_SHEET.columns;
-    const firstRow = planRes.data.values[0];
+
+    // 依課表計畫 id 分組；C 欄空白的列沿用上一列的計畫，相容「只在第一列填計畫資訊」的舊寫法
+    type PlanGroup = { firstRow: unknown[]; rows: unknown[][]; order: number };
+    const groups = new Map<string, PlanGroup>();
+    let currentGroupId = "";
+    for (const row of planRes.data.values) {
+      const rowPlanId = cell(row, P.planId);
+      if (rowPlanId) currentGroupId = rowPlanId;
+      if (!currentGroupId) continue;
+      const group = groups.get(currentGroupId);
+      if (group) {
+        group.rows.push(row);
+      } else {
+        groups.set(currentGroupId, { firstRow: row, rows: [row], order: groups.size });
+      }
+    }
+
+    // 只取最新的計畫：建立日期（YYYY-MM-DD 可直接字串比較）最晚者；日期相同或無法比較時，取試算表中較下方者
+    // 不用計畫 id 比大小，因為 id 格式不固定（例：260922 與 20261125）
+    const isYmd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+    let latest: PlanGroup | undefined;
+    for (const group of Array.from(groups.values())) {
+      if (!latest) {
+        latest = group;
+        continue;
+      }
+      const a = cell(group.firstRow, P.createdAt);
+      const b = cell(latest.firstRow, P.createdAt);
+      if (isYmd(a) && isYmd(b) ? a >= b : group.order > latest.order) latest = group;
+    }
+
+    const firstRow = latest?.firstRow ?? [];
     planCreatedAt = cell(firstRow, P.createdAt) || planCreatedAt;
     planTitle = cell(firstRow, P.title) || planTitle;
     planId = cell(firstRow, P.planId) || planId;
     planWeeks = cell(firstRow, P.weeks) || planWeeks;
 
-    for (const row of planRes.data.values) {
+    for (const row of latest?.rows ?? []) {
       const workoutName = cell(row, P.workoutName);
       const category = cell(row, P.category);
       const exerciseName = cell(row, P.exerciseName);
@@ -152,7 +183,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
       logs.push({
         date,
-        planId: cell(row, L.planId) || planId,
+        // 空白就保留空白：補上目前計畫 id 會讓舊日誌被算進新計畫
+        planId: cell(row, L.planId),
         workout,
         mainExercise,
         mainSetsDetail,
@@ -174,8 +206,10 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   let lastDate = "尚未開始";
   let nextIdx = 0;
 
-  if (logs.length > 0) {
-    const latest = logs[logs.length - 1];
+  // 循環位置只看目前計畫的日誌；舊計畫的最後一課不能拿來推新計畫的下一課
+  const planLogs = logs.filter((l) => l.planId === planId && cycle.includes(l.workout));
+  if (planLogs.length > 0) {
+    const latest = planLogs[planLogs.length - 1];
     if (latest.workout) {
       lastWorkoutName = latest.workout;
       // YYYY-MM-DD 顯示成 MM/DD；非標準格式就原樣呈現
@@ -222,7 +256,7 @@ export async function appendTrainingLogToSheet(log: TrainingLog) {
   // 依 schema 的欄位字母順序排出整列，欄位調整時只需改 sheetSchema.ts
   const values: Record<keyof typeof LOG_SHEET.columns, string | number> = {
     date: log.date,
-    planId: log.planId || "260922",
+    planId: log.planId || "",
     workout: log.workout,
     mainExercise: log.mainExercise,
     mainSetsDetail: log.mainSetsDetail,
