@@ -57,7 +57,7 @@ export interface PrimaryLiftSession {
 export interface DashboardData {
   planMeta: {
     title: string;
-    weeks: string;
+    weeks: string; // 課表 D 欄：整份循環要跑幾輪（沿用欄位名，不是日曆週）
     createdAt: string;
     id: string;
   };

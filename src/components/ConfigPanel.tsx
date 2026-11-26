@@ -174,8 +174,8 @@ export default function ConfigPanel({ open, onClose, data, lastSyncedAt }: Confi
               <span className="num">{meta?.createdAt || "-"}</span>
             </div>
             <div className="row">
-              <span>週期長度</span>
-              <span>{meta?.weeks ? `${meta.weeks} 週` : "-"}</span>
+              <span>循環輪數</span>
+              <span>{meta?.weeks ? `${meta.weeks} 輪` : "-"}</span>
             </div>
             <div className="row">
               <span>循環順序</span>

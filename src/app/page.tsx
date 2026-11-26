@@ -98,7 +98,7 @@ export default function TrainingMobileApp() {
   const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const logDays = (data?.logs || []).map((l) => toDay(l.date)).filter((t): t is number => t !== null);
   const daysSinceLast = logDays.length > 0 ? Math.round((todayTs - Math.max(...logDays)) / DAY_MS) : null;
-  // 週期進度：練完一整輪循環才算一週，不跟日曆走——否則休息天一多，8 週的課表根本練不完就「到期」
+  // 計畫進度以「輪」計：課表 D 欄是整份循環要跑幾輪，練完一整輪才算一輪，跟日曆的週無關
   const planStartTs = toDay(data?.planMeta.createdAt);
   const cycleList = data?.status.cycle || [];
   const cycleLen = cycleList.length;
@@ -108,11 +108,11 @@ export default function TrainingMobileApp() {
     const t = toDay(l.date);
     return planStartTs === null || t === null || t >= planStartTs;
   }).length;
-  const totalWeeks = parseInt(data?.planMeta.weeks || "", 10) || null;
+  const totalRounds = parseInt(data?.planMeta.weeks || "", 10) || null;
   const completedCycles = cycleLen > 0 ? Math.floor(planSessionCount / cycleLen) : 0;
-  const cycleFinished = totalWeeks !== null && completedCycles >= totalWeeks;
-  const cycleWeek = cycleLen > 0 ? completedCycles + 1 : null;
-  const sessionInWeek = cycleLen > 0 ? planSessionCount % cycleLen : 0;
+  const cycleFinished = totalRounds !== null && completedCycles >= totalRounds;
+  const cycleRound = cycleLen > 0 ? completedCycles + 1 : null;
+  const sessionInRound = cycleLen > 0 ? planSessionCount % cycleLen : 0;
   const currentIdx = data?.status.currentIndex ?? 0;
   const hasPlanRecord = planSessionCount > 0;
   const lastAnyLog = data?.logs.length ? data.logs[data.logs.length - 1] : null;
@@ -214,7 +214,7 @@ export default function TrainingMobileApp() {
               <Skeleton w="12em" h="0.85em" />
             ) : (
               <>
-                {data?.planMeta.weeks ? `${data.planMeta.weeks} 週週期` : "週期訓練"}
+                {data?.planMeta.weeks ? `循環 ${data.planMeta.weeks} 輪` : "循環訓練"}
                 {data?.planMeta.createdAt ? ` · ${data.planMeta.createdAt} 建立` : ""}
               </>
             )}
@@ -265,7 +265,7 @@ export default function TrainingMobileApp() {
                   ) : hasPlanRecord ? (
                     <>
                       <div>上次 {data?.status.lastWorkout.date} {data?.status.lastWorkout.workout}</div>
-                      <div className="text-[11px] text-[var(--muted)]">本週第 {currentIdx + 1} 課 / {cycleLen}</div>
+                      <div className="text-[11px] text-[var(--muted)]">本輪第 {currentIdx + 1} 課 / {cycleLen}</div>
                     </>
                   ) : (
                     <>
@@ -292,7 +292,7 @@ export default function TrainingMobileApp() {
               </div>
             </div>
 
-            {/* 循環位置 + 進度環：本輪練到哪一課、週期與本週進度 */}
+            {/* 循環位置 + 進度環：本輪練到哪一課、整期與本輪進度 */}
             <div className="card">
               <div className="section-title">
                 <div className="eyebrow">Cycle · 目前循環位置</div>
@@ -320,12 +320,12 @@ export default function TrainingMobileApp() {
               </div>
               {!initialLoading && cycleLen > 0 && (
                 <CycleRoad
-                  totalWeeks={totalWeeks}
-                  week={cycleWeek ?? 1}
-                  sessionInWeek={sessionInWeek}
+                  totalRounds={totalRounds}
+                  round={cycleRound ?? 1}
+                  sessionInRound={sessionInRound}
                   cycleLen={cycleLen}
                   finished={cycleFinished}
-                  remainingSessions={totalWeeks ? Math.max(totalWeeks * cycleLen - planSessionCount, 0) : 0}
+                  remainingSessions={totalRounds ? Math.max(totalRounds * cycleLen - planSessionCount, 0) : 0}
                   nextWorkout={currentWorkoutId}
                   logs={data?.logs || []}
                 />
@@ -684,10 +684,10 @@ export default function TrainingMobileApp() {
             </div>
 
             <div className="card">
-              <h2>8 週觀察指標</h2>
+              <h2>整期觀察指標</h2>
               <div className="row">
                 <span>訓練表現</span>
-                <span>各課表主項負重穩定度／動作離心控制／每週 Volume 微幅上升</span>
+                <span>各課表主項負重穩定度／動作離心控制／每輪 Volume 微幅上升</span>
               </div>
               <div className="row">
                 <span>身體變化</span>

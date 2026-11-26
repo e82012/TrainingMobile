@@ -1,9 +1,9 @@
 import { TrainingLog } from "@/types";
 
 interface CycleRoadProps {
-  totalWeeks: number | null; // 計畫週數；null 時不畫路線，只留最近 7 天
-  week: number; // 目前第幾週（從 1 起算）
-  sessionInWeek: number; // 本週已練幾課
+  totalRounds: number | null; // 整份循環要跑幾輪（課表 D 欄）；null 時不畫路線，只留最近 7 天
+  round: number; // 目前第幾輪（從 1 起算）
+  sessionInRound: number; // 本輪已練幾課
   cycleLen: number;
   finished: boolean;
   remainingSessions: number; // 整期還剩幾課，用來推估完成日
@@ -31,9 +31,9 @@ function intensityLevel(log: TrainingLog, bestByExercise: Map<string, number>): 
 const LEVEL_LABEL = ["", "低", "中", "高"];
 
 export default function CycleRoad({
-  totalWeeks,
-  week,
-  sessionInWeek,
+  totalRounds,
+  round,
+  sessionInRound,
   cycleLen,
   finished,
   remainingSessions,
@@ -79,11 +79,11 @@ export default function CycleRoad({
     etaText = `預計 ${eta.getFullYear() !== now.getFullYear() ? `${eta.getFullYear()}/` : ""}${md} 完成`;
   }
 
-  const showRoad = totalWeeks !== null && totalWeeks > 1;
-  const weeks = totalWeeks ?? 0;
-  const currentWeek = Math.min(week, weeks);
-  const nodePct = (w: number) => ((w - 1) / Math.max(weeks - 1, 1)) * 100;
-  const fillPct = finished ? 100 : Math.min(((currentWeek - 1 + sessionInWeek / Math.max(cycleLen, 1)) / Math.max(weeks - 1, 1)) * 100, 100);
+  const showRoad = totalRounds !== null && totalRounds > 1;
+  const rounds = totalRounds ?? 0;
+  const currentRound = Math.min(round, rounds);
+  const nodePct = (w: number) => ((w - 1) / Math.max(rounds - 1, 1)) * 100;
+  const fillPct = finished ? 100 : Math.min(((currentRound - 1 + sessionInRound / Math.max(cycleLen, 1)) / Math.max(rounds - 1, 1)) * 100, 100);
   const ringR = 17;
   const ringC = 2 * Math.PI * ringR;
 
@@ -92,32 +92,32 @@ export default function CycleRoad({
       {showRoad && (
         <>
           <div className="road-head">
-            <span className="eyebrow">{weeks} 週路線</span>
+            <span className="eyebrow">{rounds} 輪路線</span>
             <span>
-              第 <b className="num-display">{currentWeek}</b> / {weeks} 週
+              第 <b className="num-display">{currentRound}</b> / {rounds} 輪
             </span>
           </div>
-          <div className="road" role="img" aria-label={`第 ${currentWeek} 週，共 ${weeks} 週，本週 ${sessionInWeek}/${cycleLen} 課`}>
+          <div className="road" role="img" aria-label={`第 ${currentRound} 輪，共 ${rounds} 輪，本輪 ${sessionInRound}/${cycleLen} 課`}>
             <div className="road-track" />
             <div className="road-fill" style={{ width: `${fillPct}%` }} />
-            {Array.from({ length: weeks }, (_, i) => i + 1).map((w) => {
-              const isCurrent = !finished && w === currentWeek;
-              const isDone = finished || w < currentWeek;
+            {Array.from({ length: rounds }, (_, i) => i + 1).map((w) => {
+              const isCurrent = !finished && w === currentRound;
+              const isDone = finished || w < currentRound;
               if (isCurrent) {
                 return (
                   <svg key={w} className="road-current" style={{ left: `${nodePct(w)}%` }} width="44" height="44" viewBox="0 0 44 44" aria-hidden="true">
                     <circle cx="22" cy="22" r={ringR} className="ring-bg" />
-                    {sessionInWeek > 0 && (
+                    {sessionInRound > 0 && (
                       <circle
                         cx="22"
                         cy="22"
                         r={ringR}
                         className="ring-fg"
-                        strokeDasharray={`${(ringC * sessionInWeek) / Math.max(cycleLen, 1)} ${ringC}`}
+                        strokeDasharray={`${(ringC * sessionInRound) / Math.max(cycleLen, 1)} ${ringC}`}
                         transform="rotate(-90 22 22)"
                       />
                     )}
-                    <text x="22" y="26.5" textAnchor="middle">W{w}</text>
+                    <text x="22" y="26.5" textAnchor="middle">R{w}</text>
                   </svg>
                 );
               }
@@ -129,12 +129,12 @@ export default function CycleRoad({
             })}
           </div>
           <div className="road-ends">
-            <span>W1</span>
-            <span>W{weeks} 完成</span>
+            <span>R1</span>
+            <span>R{rounds} 完成</span>
           </div>
           {!finished && (
             <div className="road-caret-row">
-              <span className="road-caret" style={{ left: `${nodePct(currentWeek)}%` }} />
+              <span className="road-caret" style={{ left: `${nodePct(currentRound)}%` }} />
             </div>
           )}
         </>
@@ -147,7 +147,7 @@ export default function CycleRoad({
           </span>
           {cycleLen > 0 && (
             <span>
-              本週 <b className="num-display accent">{sessionInWeek}/{cycleLen}</b> 課
+              本輪 <b className="num-display accent">{sessionInRound}/{cycleLen}</b> 課
             </span>
           )}
         </div>

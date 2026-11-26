@@ -16,7 +16,7 @@ export const PLAN_SHEET = {
     createdAt: { col: "A", label: "建立日期", note: "讀各計畫第一列；最晚者為目前計畫" },
     title: { col: "B", label: "計畫名稱", note: "讀各計畫第一列" },
     planId: { col: "C", label: "計畫代碼", note: "分組依據；空白沿用上一列" },
-    weeks: { col: "D", label: "週期週數", note: "讀各計畫第一列" },
+    weeks: { col: "D", label: "循環輪數", note: "整份循環要跑幾輪；讀各計畫第一列" },
     workoutName: { col: "E", label: "課表名稱", note: "如 Push A；出現順序即循環順序" },
     category: { col: "F", label: "訓練部位" },
     exerciseName: { col: "G", label: "動作名稱" },
