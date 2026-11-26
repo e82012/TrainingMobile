@@ -117,10 +117,10 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
         className="fixed right-4 z-40 flex items-center gap-2 px-4 py-3 rounded-full font-bold text-sm shadow-xl transition-all duration-200 active:scale-95"
         style={{
           bottom: "calc(var(--tabbar-h) + var(--safe-bottom) + 14px)",
-          background: "linear-gradient(135deg, #1f2a1a 0%, #15181d 100%)",
+          background: "var(--accent-bg)",
           border: "1px solid var(--accent-line)",
           color: "var(--accent)",
-          boxShadow: "0 8px 24px rgba(155, 225, 93, 0.2)",
+          boxShadow: "0 8px 24px oklch(53% 0.13 258 / 0.25)",
         }}
         aria-label="打開 Gemini 訓練助手"
       >
@@ -284,7 +284,7 @@ export default function GeminiAssistantModal({ onDataUpdated }: GeminiAssistantM
                 <button
                   type="submit"
                   disabled={!input.trim() || loading}
-                  className="p-2.5 rounded-xl bg-[var(--accent)] text-[var(--bg)] font-bold disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all"
+                  className="p-2.5 rounded-xl bg-[var(--accent-fill)] text-[var(--on-accent)] font-bold disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all"
                   aria-label="發送訊息"
                 >
                   <Send className="w-4 h-4" />

@@ -37,7 +37,7 @@ export default function LogDetailModal({ log, onClose }: LogDetailModalProps) {
               <Calendar className="w-3 h-3" />
               <span>{log.date}</span>
               <span>·</span>
-              <span>課表計畫 ID: {log.planId || "260922"}</span>
+              <span>課表計畫 ID: {log.planId || "未填"}</span>
             </div>
           </div>
           <button
