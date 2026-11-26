@@ -19,7 +19,7 @@ import PlanDetailModal from "@/components/PlanDetailModal";
 import LogDetailModal from "@/components/LogDetailModal";
 import ConfigPanel from "@/components/ConfigPanel";
 import Skeleton from "@/components/Skeleton";
-import ProgressRings from "@/components/ProgressRings";
+import CycleRoad from "@/components/CycleRoad";
 
 export default function TrainingMobileApp() {
   const [activeTab, setActiveTab] = useState<"home" | "workout" | "plan" | "logs" | "progress">("home");
@@ -82,6 +82,11 @@ export default function TrainingMobileApp() {
   const currentLatestVolume = hasPrimaryHistory
     ? currentPrimaryLogs[currentPrimaryLogs.length - 1].volume || 0
     : 0;
+  const latestPrimaryLog = hasPrimaryHistory ? currentPrimaryLogs[currentPrimaryLogs.length - 1] : null;
+  // 和前一次比的 Volume 變化；只有一筆紀錄時沒有比較對象
+  const prevPrimaryVolume = currentPrimaryLogs.length > 1 ? currentPrimaryLogs[currentPrimaryLogs.length - 2].volume || 0 : null;
+  const volumeDelta = prevPrimaryVolume !== null ? currentLatestVolume - prevPrimaryVolume : null;
+  const volumeDeltaPct = prevPrimaryVolume ? Math.round((volumeDelta! / prevPrimaryVolume) * 100) : null;
 
   // 總覽統計：以本地日期的「日」為單位計算，避免時區造成差一天
   const DAY_MS = 86_400_000;
@@ -92,7 +97,6 @@ export default function TrainingMobileApp() {
   const now = new Date();
   const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const logDays = (data?.logs || []).map((l) => toDay(l.date)).filter((t): t is number => t !== null);
-  const last7DaysCount = logDays.filter((t) => todayTs - t >= 0 && todayTs - t < 7 * DAY_MS).length;
   const daysSinceLast = logDays.length > 0 ? Math.round((todayTs - Math.max(...logDays)) / DAY_MS) : null;
   // 週期進度：練完一整輪循環才算一週，不跟日曆走——否則休息天一多，8 週的課表根本練不完就「到期」
   const planStartTs = toDay(data?.planMeta.createdAt);
@@ -117,7 +121,8 @@ export default function TrainingMobileApp() {
   const restOverdue = daysSinceLast !== null && daysSinceLast > REST_ALERT_DAYS;
 
   // Primary Lift 動態 SVG 柱狀圖計算
-  const renderPrimaryLiftChart = () => {
+  // compact：首頁用的精簡版，只畫最近 6 次、矮一點、日期用 MM/DD 不旋轉
+  const renderPrimaryLiftChart = (compact = false) => {
     if (currentPrimaryLogs.length === 0) {
       return (
         <div className="tip text-center py-4">
@@ -129,13 +134,15 @@ export default function TrainingMobileApp() {
       );
     }
 
-    const rows = currentPrimaryLogs.map((l) => ({
+    const rows = (compact ? currentPrimaryLogs.slice(-6) : currentPrimaryLogs).map((l) => ({
       date: l.date.replace(/-/g, ""),
       volume: l.volume || 0,
     }));
 
     const fmt = (n: number) => n.toLocaleString("en-US");
-    const W = 320, H = 160, left = 36, right = 316, top = 22, bottom = 124;
+    const W = 320, left = 36, right = 316, top = 22;
+    const H = compact ? 124 : 160;
+    const bottom = compact ? 96 : 124;
     const max = Math.max(...rows.map((r) => r.volume), 100);
     const step = max > 2000 ? 1000 : 500;
     const yMax = Math.ceil((max * 1.15) / step) * step;
@@ -143,7 +150,7 @@ export default function TrainingMobileApp() {
 
     const slot = (right - left) / rows.length;
     const barW = Math.min(44, slot * 0.6);
-    const tilt = slot < 52;
+    const tilt = !compact && slot < 52;
 
     const gridLines = [];
     for (let v = 0; v <= yMax; v += step) {
@@ -186,7 +193,7 @@ export default function TrainingMobileApp() {
                   textAnchor={tilt ? "end" : "middle"}
                   transform={tilt ? `rotate(-40 ${cx} ${bottom + 12})` : undefined}
                 >
-                  {tilt ? r.date.slice(4) : r.date}
+                  {compact ? `${r.date.slice(4, 6)}/${r.date.slice(6)}` : tilt ? r.date.slice(4) : r.date}
                 </text>
               </g>
             );
@@ -312,19 +319,15 @@ export default function TrainingMobileApp() {
                 })}
               </div>
               {!initialLoading && cycleLen > 0 && (
-                <ProgressRings
-                  rings={[
-                    {
-                      label: cycleFinished ? "週期已完成" : "週期",
-                      value: cycleFinished ? totalWeeks ?? 0 : cycleWeek ?? 0,
-                      unit: totalWeeks ? `/ ${totalWeeks} 週` : "週",
-                      ratio: totalWeeks ? completedCycles / totalWeeks : 0,
-                      color: "var(--accent)",
-                    },
-                    { label: "本週課數", value: sessionInWeek, unit: `/ ${cycleLen}`, ratio: sessionInWeek / cycleLen, color: "var(--blue)" },
-                    // 以「7 天練完一輪」當作滿圈的參考值
-                    { label: "近 7 天", value: last7DaysCount, unit: "次", ratio: last7DaysCount / cycleLen, color: "var(--orange)" },
-                  ]}
+                <CycleRoad
+                  totalWeeks={totalWeeks}
+                  week={cycleWeek ?? 1}
+                  sessionInWeek={sessionInWeek}
+                  cycleLen={cycleLen}
+                  finished={cycleFinished}
+                  remainingSessions={totalWeeks ? Math.max(totalWeeks * cycleLen - planSessionCount, 0) : 0}
+                  nextWorkout={currentWorkoutId}
+                  logs={data?.logs || []}
                 />
               )}
             </div>
@@ -339,9 +342,15 @@ export default function TrainingMobileApp() {
                 </>
               ) : (
                 <>
-                  <div className="eyebrow">主項 · Primary Lift</div>
-                  <h2 className="mt-1">{currentPrimary?.name || "主項訓練"}</h2>
-                  <div className="flex items-end gap-6 mt-2">
+                  <div className="section-title !mb-1">
+                    <div className="min-w-0">
+                      <div className="eyebrow">主項 · Primary Lift</div>
+                      <h2 className="mt-1">{currentPrimary?.name || "主項訓練"}</h2>
+                    </div>
+                    {/* 目標是中英混排文字，放徽章裡比大字窄體易讀 */}
+                    <span className="badge">今日 {currentPrimary?.sets || "-"}</span>
+                  </div>
+                  <div className="flex items-end gap-5 mt-2">
                     <div>
                       <div className="num-display text-[30px] leading-tight">
                         {hasPrimaryHistory ? currentMaxWeight : "-"}
@@ -350,11 +359,30 @@ export default function TrainingMobileApp() {
                       <div className="text-[11px] text-[var(--muted)]">歷史最高</div>
                     </div>
                     <div>
-                      {/* 目標是中英混排文字，用大字窄體會太粗重，改用一般字重的中字級 */}
-                      <div className="text-[18px] font-bold leading-tight pb-[3px]">{currentPrimary?.sets || "-"}</div>
-                      <div className="text-[11px] text-[var(--muted)]">今日目標</div>
+                      <div className="num-display text-[30px] leading-tight">
+                        {hasPrimaryHistory ? currentLatestVolume.toLocaleString("en-US") : "-"}
+                        {hasPrimaryHistory && <small className="unit"> kg</small>}
+                      </div>
+                      <div className="text-[11px] text-[var(--muted)]">上次 Volume</div>
                     </div>
+                    {volumeDelta !== null && (
+                      <div>
+                        <div className={`num-display text-[22px] leading-tight pb-[2px] ${volumeDelta >= 0 ? "text-[var(--accent)]" : "text-[var(--orange)]"}`}>
+                          {volumeDelta >= 0 ? "▲" : "▼"} {Math.abs(volumeDeltaPct ?? 0)}%
+                        </div>
+                        <div className="text-[11px] text-[var(--muted)]">
+                          比前次 {volumeDelta >= 0 ? "+" : "−"}{Math.abs(volumeDelta).toLocaleString("en-US")}
+                        </div>
+                      </div>
+                    )}
                   </div>
+                  {renderPrimaryLiftChart(true)}
+                  {/* 上次的組數就是今天要超越的基準 */}
+                  {latestPrimaryLog?.mainSetsDetail && (
+                    <div className="trend-note">
+                      <b>上次 {latestPrimaryLog.date.slice(5).replace("-", "/")}</b>：{latestPrimaryLog.mainSetsDetail}
+                    </div>
+                  )}
                   {/* 「主項動作」是課表 J 欄空白時的預設字，不是真的目標 */}
                   {currentPrimary?.notes && currentPrimary.notes !== "主項動作" && (
                     <div className="trend-note">

@@ -19,6 +19,10 @@
   --accent-line: oklch(40% 0.08 258);
   --blue: oklch(73% 0.08 215);
   --orange: oklch(78% 0.08 75);
+  /* 訓練強度三級：亮度拉開到在深色底上一眼可分 */
+  --int-1: oklch(36% 0.07 258);
+  --int-2: oklch(52% 0.13 258);
+  --int-3: oklch(78% 0.1 250);
   --font-num: var(--font-barlow), "Noto Sans TC", sans-serif;
   --radius: 18px;
   --radius-sm: 12px;
@@ -153,49 +157,278 @@ main {
   color: var(--muted);
 }
 
-/* 進度環 */
-.rings {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+/* 週路線 + 最近 7 天 */
+.road-block {
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
 
-.rings svg {
-  flex-shrink: 0;
+.road-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--muted);
 }
 
-.ring-legend {
+.road-head b {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.road {
+  position: relative;
+  height: 44px;
+  margin: 6px 12px 0;
+}
+
+.road-track,
+.road-fill {
+  position: absolute;
+  left: 0;
+  top: 20px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.road-track {
+  right: 0;
+  background: var(--card2);
+}
+
+.road-fill {
+  background: var(--accent);
+  transform-origin: left;
+  animation: road-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.road-node {
+  position: absolute;
+  top: 14px;
+  width: 16px;
+  height: 16px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--sunken);
+  border: 2px solid var(--line);
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--bg);
+}
+
+.road-node.done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.road-current {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  animation: road-pop 0.5s 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.road-current .ring-bg {
+  fill: var(--sunken);
+  stroke: var(--card2);
+  stroke-width: 4;
+}
+
+.road-current .ring-fg {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.road-current text {
+  fill: var(--text);
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.road-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  margin: 2px 4px 0;
+}
+
+.road-caret-row {
+  position: relative;
+  height: 10px;
+  margin: 0 12px;
+}
+
+.road-caret {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid var(--sunken);
+}
+
+.days-panel {
+  background: var(--sunken);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.days-head,
+.days-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.days-head b {
+  color: var(--text);
+}
+
+.days-head b.accent,
+.day-date.accent {
+  color: var(--accent);
+}
+
+.days-head .num-display {
+  font-size: 15px;
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  margin: 8px 0;
+}
+
+.day {
+  text-align: center;
   min-width: 0;
 }
 
-.ring-legend div {
+.day-cell {
+  height: 40px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.ring-legend i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  align-self: center;
-}
-
-.ring-legend b {
-  font-size: 22px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
   line-height: 1.1;
+  color: var(--muted);
+  padding: 0 2px;
 }
 
-.ring-legend span {
-  font-size: 11px;
+.day-cell small {
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.day-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-cell.today {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 強度三級用明顯不同的亮度，搭配格內小槓，不只靠顏色區分 */
+.day-cell.lv0,
+.day-cell.lv1,
+.day-cell.lv2,
+.day-cell.lv3 {
+  border-color: transparent;
+}
+
+.day-cell.lv0,
+.lv1 {
+  background: var(--int-1);
+  color: var(--text);
+}
+
+.lv2 {
+  background: var(--int-2);
+  color: var(--on-accent);
+}
+
+.lv3 {
+  background: var(--int-3);
+  color: var(--bg);
+}
+
+.pips {
+  display: flex;
+  gap: 2px;
+}
+
+.pips i {
+  width: 6px;
+  height: 3px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.25;
+}
+
+.pips i.on {
+  opacity: 0.9;
+}
+
+.day-date {
+  font-size: 9px;
   color: var(--muted);
+  margin-top: 3px;
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.legend i {
+  width: 10px;
+  height: 8px;
+  border-radius: 2px;
+  margin-left: 4px;
+}
+
+@keyframes road-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes road-pop {
+  from {
+    transform: translateX(-50%) scale(0.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .road-fill,
+  .road-current {
+    animation: none;
+  }
 }
 
 .kicker,
@@ -750,4 +983,9 @@ main.is-refreshing {
   .metric strong {
     font-size: 18px;
   }
+}
+
+/* 右下角 Gemini 浮動按鈕會蓋住最後一張卡片底部，多留一段空間讓內容能捲到按鈕上方 */
+main {
+  padding-bottom: 76px;
 }
